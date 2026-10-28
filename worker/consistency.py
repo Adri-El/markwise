@@ -2,17 +2,41 @@
 
 Compares decisions on each rubric point across one mark-all batch.
 Two conflict kinds:
-- similar_quotes: two quoted awards with similar quotes, different marks
-- quote_in_answer: one student's awarded quote also appears in another
-  student's stored answer, where the point got different marks (e.g. 0)
+- similar_quotes: two quoted awards (4+ words each) with similar quotes,
+  different marks
+- quote_in_answer: one student's awarded quote appears exactly
+  (after normalising) in another student's stored answer, where the
+  point got different marks (e.g. 0)
+
+Pairs are skipped when the 0-mark decision's reason cites an accept/reject
+note or a scheme rule.
 """
 
 import json
 from pathlib import Path
 
-from .tools import quotes_similar
+from .tools import normalize, quotes_similar
 
 COMPLETE_STATUSES = ("marked", "needs_review")
+
+SCHEME_REASON_HINTS = ("accept", "reject", "first two", "scheme")
+
+
+def quote_in_answer(quote, answer):
+    """True when the normalised quote appears exactly in the answer."""
+    q = normalize(quote)
+    return bool(q) and q in normalize(answer)
+
+
+def quotes_match(a, b):
+    """Quote-vs-quote match: similar, and both at least 4 words."""
+    if len(normalize(a).split()) < 4 or len(normalize(b).split()) < 4:
+        return False
+    return quotes_similar(a, b)
+
+
+def _cites_scheme(reason):
+    return any(hint in normalize(reason or "") for hint in SCHEME_REASON_HINTS)
 
 
 def collect_run(run_dir):
@@ -38,9 +62,11 @@ def _conflict(kind, pid, qid, run_a, award_a, run_b, award_b):
         "point_id": pid,
         "question_id": qid,
         "a": {"student": run_a["student_id"], "marks": award_a["marks"],
-              "quote": award_a.get("quote", "")},
+              "quote": award_a.get("quote", ""),
+              "reason": award_a.get("reason", "")},
         "b": {"student": run_b["student_id"], "marks": award_b["marks"],
-              "quote": award_b.get("quote", "")},
+              "quote": award_b.get("quote", ""),
+              "reason": award_b.get("reason", "")},
     }
 
 
@@ -64,7 +90,7 @@ def find_conflicts(rubric, runs):
                 (run_a, award_a), (run_b, award_b) = quoted[i], quoted[j]
                 if award_a["marks"] == award_b["marks"]:
                     continue
-                if quotes_similar(award_a["quote"], award_b["quote"]):
+                if quotes_match(award_a["quote"], award_b["quote"]):
                     conflicts.append(_conflict(
                         "similar_quotes", pid, qid,
                         run_a, award_a, run_b, award_b))
@@ -72,8 +98,10 @@ def find_conflicts(rubric, runs):
             for run_b, award_b in unquoted:
                 if award_a["marks"] == award_b["marks"]:
                     continue
+                if _cites_scheme(award_b.get("reason", "")):
+                    continue
                 text = run_b["stored"].get(qid, "") if qid else ""
-                if text and quotes_similar(award_a["quote"], text):
+                if text and quote_in_answer(award_a["quote"], text):
                     conflicts.append(_conflict(
                         "quote_in_answer", pid, qid,
                         run_a, award_a, run_b, award_b))
@@ -111,4 +139,6 @@ def write_consistency_report(assessment, rubric, run_dirs, runs_dir):
             c["point_id"], c["kind"],
             c["a"]["student"], c["a"]["marks"], _short(c["a"]["quote"]),
             c["b"]["student"], c["b"]["marks"], _short(c["b"]["quote"])))
+        lines.append("      reasons: %s vs %s" % (
+            _short(c["a"]["reason"]), _short(c["b"]["reason"])))
     return lines

@@ -196,6 +196,55 @@ def cmd_mark_all(args):
     return 0
 
 
+def _latest_run_dirs(assessment_id, runs_dir):
+    """Newest run folder per student for one assessment."""
+    latest = {}
+    runs_dir = Path(runs_dir)
+    if not runs_dir.is_dir():
+        return []
+    for result_path in sorted(runs_dir.glob("*/result.json")):
+        try:
+            result = json.loads(result_path.read_text())
+        except (ValueError, OSError):
+            continue
+        if result.get("assessment_id") != assessment_id:
+            continue
+        student = result.get("student_id")
+        if not student:
+            continue
+        mtime = result_path.stat().st_mtime
+        if student not in latest or mtime > latest[student][0]:
+            latest[student] = (mtime, result_path.parent)
+    return [latest[student][1] for student in sorted(latest)]
+
+
+def cmd_check_consistency(args):
+    from .consistency import write_consistency_report
+
+    assessment_dir = Path(args.assessment_dir)
+    assessment = load_json(assessment_dir / "assessment.json")
+    rubric_path = assessment_dir / "rubric.json"
+    if not rubric_path.exists():
+        print("missing %s (run build-rubric first)" % rubric_path,
+              file=sys.stderr)
+        return 2
+    rubric = load_json(rubric_path)
+    errors = check_rubric(rubric, assessment)
+    if errors:
+        print("invalid rubric.json:", file=sys.stderr)
+        for error in errors:
+            print("- %s" % error, file=sys.stderr)
+        return 2
+    run_dirs = _latest_run_dirs(assessment.get("id"), args.runs_dir)
+    if not run_dirs:
+        print("no runs found for %r" % assessment.get("id"), file=sys.stderr)
+        return 1
+    for line in write_consistency_report(
+            assessment, rubric, run_dirs, args.runs_dir):
+        print(line)
+    return 0
+
+
 def main(argv=None):
     from dotenv import load_dotenv
 
@@ -221,6 +270,12 @@ def main(argv=None):
     all_cmd.add_argument("--workers", type=int, default=4,
                          help="parallel marking threads (default 4)")
     all_cmd.set_defaults(func=cmd_mark_all)
+
+    check = sub.add_parser("check-consistency",
+                           help="consistency check over latest runs")
+    check.add_argument("assessment_dir")
+    check.add_argument("--runs-dir", default=str(Path("worker") / "runs"))
+    check.set_defaults(func=cmd_check_consistency)
 
     args = parser.parse_args(argv)
     return args.func(args)
