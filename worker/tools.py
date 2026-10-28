@@ -235,7 +235,8 @@ class MarkingState:
     def uncovered_points(self):
         covered = set(self.awards)
         covering = [f for f in self.flags
-                    if f["reason"] != "instruction_in_answer"]
+                    if f["reason"] not in ("instruction_in_answer",
+                                           "ambiguous")]
         flagged_points = {f["target"] for f in covering}
         flagged_questions = {
             f["target"] for f in covering if f["target"] in self.questions

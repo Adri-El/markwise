@@ -232,6 +232,21 @@ class SubmitTests(unittest.TestCase):
         state.award_mark("p3", 0, reason="no valid content")
         self.assertTrue(state.submit_marks(COMMENTS)["ok"])
 
+    def test_ambiguous_flag_needs_award_too(self):
+        state = fresh_state()
+        state.award_mark("p1", 2, quote="produce energy",
+                         reason="names the product")
+        state.award_mark("p2", 0, reason="not shown")
+        state.flag_for_review("p3", "ambiguous", "unit only implied")
+        refused = state.submit_marks(COMMENTS)
+        self.assertFalse(refused["ok"])
+        self.assertIn("p3", refused["uncovered"])
+        state.award_mark("p3", 1, quote="100 degrees",
+                         reason="value stated, unit implied")
+        done = state.submit_marks(COMMENTS)
+        self.assertTrue(done["ok"])
+        self.assertEqual(len(done["result"]["flags"]), 1)
+
     def test_submit_needs_every_comment(self):
         state = fresh_state()
         state.award_mark("p1", 2, quote="produce energy",

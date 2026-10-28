@@ -97,7 +97,7 @@ def cmd_build_rubric(args):
     return 0
 
 
-def _mark_one_file(assessment, rubric, submission_path, runs_dir):
+def _run_marking(assessment, rubric, submission_path, runs_dir):
     from .agent import mark_submission
 
     submission_path = Path(submission_path)
@@ -109,6 +109,12 @@ def _mark_one_file(assessment, rubric, submission_path, runs_dir):
     result = mark_submission(
         assessment, rubric, submission, submission_path.parent, run_dir
     )
+    return submission_path, run_dir, result
+
+
+def _mark_one_file(assessment, rubric, submission_path, runs_dir):
+    submission_path, run_dir, result = _run_marking(
+        assessment, rubric, submission_path, runs_dir)
     print("%s: %s %s/%s (%s)" % (
         submission_path.name, result["status"],
         result["total_marks"], result["max_marks"], run_dir))
@@ -153,11 +159,27 @@ def cmd_mark_all(args):
     if not submissions:
         print("no submissions found", file=sys.stderr)
         return 1
-    for path in submissions:
+
+    def work(path):
         try:
-            _mark_one_file(assessment, rubric, path, args.runs_dir)
+            name, run_dir, result = _run_marking(
+                assessment, rubric, path, args.runs_dir)
+            return "%s: %s %s/%s (%s)" % (
+                name.name, result["status"],
+                result["total_marks"], result["max_marks"], run_dir)
         except Exception as exc:
-            print("%s: failed: %s" % (path.name, exc), file=sys.stderr)
+            return "%s: failed: %s" % (path.name, exc)
+
+    workers = max(1, args.workers)
+    if workers == 1:
+        lines = [work(path) for path in submissions]
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            lines = list(pool.map(work, submissions))
+    for line in lines:
+        print(line)
     return 0
 
 
@@ -183,6 +205,8 @@ def main(argv=None):
     all_cmd = sub.add_parser("mark-all", help="mark every submission")
     all_cmd.add_argument("assessment_dir")
     all_cmd.add_argument("--runs-dir", default=str(Path("worker") / "runs"))
+    all_cmd.add_argument("--workers", type=int, default=4,
+                         help="parallel marking threads (default 4)")
     all_cmd.set_defaults(func=cmd_mark_all)
 
     args = parser.parse_args(argv)
