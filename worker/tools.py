@@ -30,6 +30,17 @@ def quote_in_text(quote, stored_text):
     return q in normalize(stored_text)
 
 
+def quotes_similar(a, b):
+    """True when one normalised text contains the other or shares most words."""
+    na, nb = normalize(a), normalize(b)
+    if not na or not nb:
+        return False
+    if na in nb or nb in na:
+        return True
+    sa, sb = set(na.split()), set(nb.split())
+    return len(sa & sb) / min(len(sa), len(sb)) >= 0.8
+
+
 def is_half_mark(value):
     """Non-negative multiple of 0.5 (numbers only, bools excluded)."""
     if isinstance(value, bool):
@@ -67,6 +78,13 @@ def check_rubric(rubric, assessment):
             continue
         if not desc or not str(desc).strip():
             errors.append("%s (%s): missing description" % (where, pid))
+        for key in ("accept", "reject"):
+            notes = p.get(key)
+            if notes is not None and (
+                    not isinstance(notes, list)
+                    or not all(isinstance(n, str) for n in notes)):
+                errors.append(
+                    "%s (%s): %s must be a list of strings" % (where, pid, key))
         if not is_half_mark(max_marks) or max_marks <= 0:
             errors.append(
                 "%s (%s): max_marks must be a positive multiple of 0.5" % (where, pid)

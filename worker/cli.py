@@ -164,22 +164,35 @@ def cmd_mark_all(args):
         try:
             name, run_dir, result = _run_marking(
                 assessment, rubric, path, args.runs_dir)
-            return "%s: %s %s/%s (%s)" % (
+            line = "%s: %s %s/%s (%s)" % (
                 name.name, result["status"],
                 result["total_marks"], result["max_marks"], run_dir)
+            return line, run_dir
         except Exception as exc:
-            return "%s: failed: %s" % (path.name, exc)
+            return "%s: failed: %s" % (path.name, exc), None
 
     workers = max(1, args.workers)
     if workers == 1:
-        lines = [work(path) for path in submissions]
+        outcomes = [work(path) for path in submissions]
     else:
         from concurrent.futures import ThreadPoolExecutor
 
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            lines = list(pool.map(work, submissions))
-    for line in lines:
+            outcomes = list(pool.map(work, submissions))
+    for line, _ in outcomes:
         print(line)
+    new_runs = [run_dir for _, run_dir in outcomes if run_dir is not None]
+    if new_runs:
+        from .consistency import write_consistency_report
+
+        try:
+            summary = write_consistency_report(
+                assessment, rubric, new_runs, args.runs_dir)
+        except Exception as exc:
+            print("consistency check failed: %s" % exc, file=sys.stderr)
+        else:
+            for line in summary:
+                print(line)
     return 0
 
 

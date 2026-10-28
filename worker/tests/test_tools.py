@@ -8,6 +8,7 @@ from worker.tools import (
     is_half_mark,
     normalize,
     quote_in_text,
+    quotes_similar,
 )
 
 ASSESSMENT = {
@@ -292,6 +293,49 @@ class RubricCheckTests(unittest.TestCase):
         rubric = {"points": [{"id": "p1", "question_id": "q1",
                               "description": "x", "max_marks": 0.3}]}
         self.assertTrue(check_rubric(rubric, ASSESSMENT))
+
+
+class AcceptRejectTests(unittest.TestCase):
+    def _rubric_with(self, **extra):
+        points = [dict(p) for p in RUBRIC["points"]]
+        points[0] = dict(points[0], **extra)
+        return {"assessment_id": "demo", "points": points}
+
+    def test_valid_notes(self):
+        rubric = self._rubric_with(accept=["energy", "ATP"],
+                                   reject=["heat"])
+        self.assertEqual(check_rubric(rubric, ASSESSMENT), [])
+
+    def test_missing_notes_ok(self):
+        self.assertEqual(check_rubric(RUBRIC, ASSESSMENT), [])
+
+    def test_notes_must_be_lists(self):
+        rubric = self._rubric_with(accept="energy")
+        self.assertTrue(check_rubric(rubric, ASSESSMENT))
+
+    def test_notes_must_be_strings(self):
+        rubric = self._rubric_with(reject=["cold", 5])
+        self.assertTrue(check_rubric(rubric, ASSESSMENT))
+
+
+class SimilarityTests(unittest.TestCase):
+    def test_containment(self):
+        self.assertTrue(quotes_similar(
+            "produce energy", "mitochondria produce energy daily"))
+        self.assertTrue(quotes_similar(
+            "mitochondria produce energy daily", "produce energy"))
+
+    def test_word_overlap(self):
+        self.assertTrue(quotes_similar("water boils at 100 degrees",
+                                       "water boils at one hundred degrees"))
+
+    def test_different(self):
+        self.assertFalse(quotes_similar("cell wall", "cell membrane"))
+        self.assertFalse(quotes_similar("mitochondria", "chloroplast"))
+
+    def test_empty_never_similar(self):
+        self.assertFalse(quotes_similar("", "something"))
+        self.assertFalse(quotes_similar("something", ""))
 
 
 if __name__ == "__main__":

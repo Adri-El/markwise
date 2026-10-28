@@ -1,0 +1,159 @@
+{
+  "students": [
+    {
+      "student": "s01",
+      "human_total": 20,
+      "agent_total": 20.0,
+      "difference": 0.0,
+      "status": "marked",
+      "flags": []
+    },
+    {
+      "student": "s02",
+      "human_total": 20,
+      "agent_total": 20.0,
+      "difference": 0.0,
+      "status": "marked",
+      "flags": []
+    },
+    {
+      "student": "s03",
+      "human_total": 11,
+      "agent_total": 11.0,
+      "difference": 0.0,
+      "status": "marked",
+      "flags": []
+    },
+    {
+      "student": "s04",
+      "human_total": 7,
+      "agent_total": 7.0,
+      "difference": 0.0,
+      "status": "needs_review",
+      "flags": [
+        "p11:ambiguous"
+      ]
+    },
+    {
+      "student": "s05",
+      "human_total": 0,
+      "agent_total": 0.0,
+      "difference": 0.0,
+      "status": "marked",
+      "flags": []
+    },
+    {
+      "student": "s06",
+      "human_total": 2,
+      "agent_total": 2.0,
+      "difference": 0.0,
+      "status": "marked",
+      "flags": []
+    },
+    {
+      "student": "s07",
+      "human_total": 13,
+      "agent_total": 13.0,
+      "difference": 0.0,
+      "status": "marked",
+      "flags": []
+    },
+    {
+      "student": "s08",
+      "human_total": 10,
+      "agent_total": 10.0,
+      "difference": 0.0,
+      "status": "marked",
+      "flags": []
+    },
+    {
+      "student": "s09",
+      "human_total": 18,
+      "agent_total": 18.0,
+      "difference": 0.0,
+      "status": "marked",
+      "flags": []
+    },
+    {
+      "student": "s10",
+      "human_total": 17,
+      "agent_total": 17.0,
+      "difference": 0.0,
+      "status": "marked",
+      "flags": []
+    },
+    {
+      "student": "s11",
+      "human_total": 12,
+      "agent_total": 12.0,
+      "difference": 0.0,
+      "status": "needs_review",
+      "flags": [
+        "p11:ambiguous",
+        "p17:ambiguous"
+      ]
+    },
+    {
+      "student": "s12",
+      "human_total": 2,
+      "agent_total": 2.0,
+      "difference": 0.0,
+      "status": "needs_review",
+      "flags": [
+        "q2:instruction_in_answer"
+      ]
+    }
+  ],
+  "missing": [],
+  "by_question": {
+    "q1": {
+      "n": 12,
+      "exact_rate": 1.0,
+      "within1_rate": 1.0,
+      "mad": 0.0
+    },
+    "q2": {
+      "n": 12,
+      "exact_rate": 1.0,
+      "within1_rate": 1.0,
+      "mad": 0.0
+    },
+    "q3": {
+      "n": 12,
+      "exact_rate": 1.0,
+      "within1_rate": 1.0,
+      "mad": 0.0
+    },
+    "q4": {
+      "n": 12,
+      "exact_rate": 1.0,
+      "within1_rate": 1.0,
+      "mad": 0.0
+    }
+  },
+  "overall": {
+    "n_pairs": 48,
+    "exact_rate": 1.0,
+    "within1_rate": 1.0,
+    "mad_per_question": 0.0,
+    "total_diff_over_2": []
+  },
+  "disagreements": {
+    "items": [],
+    "flagged": 0,
+    "total": 0
+  },
+  "flag_check": {
+    "s12": {
+      "instruction_in_answer": "present"
+    }
+  },
+  "usage": {
+    "scripts": 12,
+    "input_tokens": 700994,
+    "output_tokens": 265245,
+    "total_tokens": 966239,
+    "avg_tokens_per_script": 80519.91666666667
+  },
+  "assessment_id": "bio101-test1"
+}

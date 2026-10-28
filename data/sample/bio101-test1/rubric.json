@@ -17,7 +17,16 @@
       "id": "p3",
       "question_id": "q1",
       "description": "Diffusion is net movement of particles",
-      "max_marks": 1
+      "max_marks": 1,
+      "accept": [
+        "particles moving",
+        "particles spreading",
+        "particles wandering",
+        "movement from high to low concentration"
+      ],
+      "reject": [
+        "things mix"
+      ]
     },
     {
       "id": "p4",
@@ -30,7 +39,15 @@
       "question_id": "q2",
       "subpart": "a",
       "description": "substrate binds to the enzyme's active site",
-      "max_marks": 1
+      "max_marks": 1,
+      "accept": [
+        "substrate fits into the active site",
+        "substrate enters the active site",
+        "enzyme hugs the substrate"
+      ],
+      "reject": [
+        "active site moulds around / changes shape to fit the substrate (that is p6, not binding)"
+      ]
     },
     {
       "id": "p6",
@@ -51,7 +68,11 @@
       "question_id": "q2",
       "subpart": "a",
       "description": "products released, enzyme unchanged and reusable",
-      "max_marks": 1
+      "max_marks": 1,
+      "accept": [
+        "lets go of the products",
+        "products leave and the enzyme can be used again"
+      ]
     },
     {
       "id": "p9",
@@ -79,13 +100,19 @@
       "question_id": "q2",
       "subpart": "b",
       "description": "reaction rate falls",
-      "max_marks": 1
+      "max_marks": 1,
+      "reject": [
+        "stops working (does not state the rate falls)"
+      ]
     },
     {
       "id": "p13",
       "question_id": "q3",
       "description": "plant cells have a cell wall, animal cells do not",
-      "max_marks": 2
+      "max_marks": 2,
+      "accept": [
+        "plants have walls, with no comparison to animal cells: 1 mark only"
+      ]
     },
     {
       "id": "p14",
@@ -97,7 +124,10 @@
       "id": "p15",
       "question_id": "q3",
       "description": "plant cells have a large permanent vacuole, animal cells have small vacuoles or none",
-      "max_marks": 2
+      "max_marks": 2,
+      "reject": [
+        "plant cells have a vacuole (no large/permanent and no animal comparison)"
+      ]
     },
     {
       "id": "p16",
@@ -109,7 +139,15 @@
       "id": "p17",
       "question_id": "q4",
       "description": "so each cell can carry more oxygen",
-      "max_marks": 1
+      "max_marks": 1,
+      "accept": [
+        "more oxygen can be transported",
+        "carry more oxygen",
+        "leaves room for oxygen"
+      ],
+      "reject": [
+        "to carry oxygen (does not say more oxygen)"
+      ]
     },
     {
       "id": "p18",
