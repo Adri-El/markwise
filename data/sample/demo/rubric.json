@@ -1,0 +1,23 @@
+{
+  "assessment_id": "demo",
+  "points": [
+    {
+      "id": "p1",
+      "question_id": "q1",
+      "description": "Energy release",
+      "max_marks": 1
+    },
+    {
+      "id": "p2",
+      "question_id": "q1",
+      "description": "Mentioning respiration",
+      "max_marks": 1
+    },
+    {
+      "id": "p3",
+      "question_id": "q2",
+      "description": "100 degrees Celsius (allow '100C')",
+      "max_marks": 2
+    }
+  ]
+}
