@@ -1,0 +1,10 @@
+node_modules/
+.next/
+__pycache__/
+.venv/
+*.pyc
+.env
+.env.*
+!.env.example
+data/private/
+worker/runs/
