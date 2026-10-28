@@ -183,6 +183,8 @@ class MarkingState:
         if marks > 0:
             if not quote or not str(quote).strip():
                 return {"ok": False, "error": "a quote is required for marks > 0"}
+            if not reason or not str(reason).strip():
+                return {"ok": False, "error": "a short reason is required"}
             try:
                 stored = self._stored_text(qid)
             except Exception as exc:
@@ -322,8 +324,9 @@ def get_tool_schemas():
             "type": "function",
             "name": "award_mark",
             "description": (
-                "Decide one rubric point. Marks above 0 need an exact quote "
-                "from the stored answer; 0 marks need a short reason and no quote. "
+                "Decide one rubric point. Every decision needs a short reason "
+                "saying why; marks above 0 also need an exact quote from the "
+                "stored answer, while 0 marks need no quote. "
                 "Repeating a point replaces the earlier decision."
             ),
             "parameters": {

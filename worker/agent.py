@@ -14,8 +14,8 @@ SYSTEM_PROMPT = """You mark a student submission against the lecturer's rubric.
 
 Rules:
 - Call tools to work. Read answers with read_answer before judging them.
-- Decide EVERY rubric point: award_mark (marks > 0 need an exact quote from
-  the stored answer; 0 marks need a short reason and no quote) or
+- Decide EVERY rubric point: award_mark (every decision needs a short
+  reason; marks > 0 also need an exact quote from the stored answer) or
   flag_for_review for what you cannot judge.
 - Finish with submit_marks and one short comment per question.
 - Never invent totals or limits; the tools compute scores.

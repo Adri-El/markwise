@@ -66,7 +66,7 @@ class QuoteMatchingTests(unittest.TestCase):
     def test_short_quote_never_matches(self):
         self.assertFalse(quote_in_text("ab", "xx ab yy"))
         self.assertFalse(fresh_state().award_mark(
-            "p3", 1, quote="at")["ok"])
+            "p3", 1, quote="at", reason="says it")["ok"])
 
 
 class HalfMarkTests(unittest.TestCase):
@@ -84,14 +84,19 @@ class AwardTests(unittest.TestCase):
         state = fresh_state()
         refused = state.award_mark("p1", 2)
         self.assertFalse(refused["ok"])
-        refused = state.award_mark("p1", 2, quote="not in the answer")
+        refused = state.award_mark("p1", 2, quote="not in the answer",
+                                   reason="mentions it")
         self.assertFalse(refused["ok"])
-        ok = state.award_mark("p1", 2, quote="mitochondria  PRODUCE energy")
+        refused = state.award_mark("p1", 2, quote="produce energy")
+        self.assertFalse(refused["ok"])
+        ok = state.award_mark("p1", 2, quote="mitochondria  PRODUCE energy",
+                              reason="names the process and product")
         self.assertTrue(ok["ok"])
 
     def test_award_refuses_over_point_max(self):
         state = fresh_state()
-        refused = state.award_mark("p1", 2.5, quote="mitochondria produce energy")
+        refused = state.award_mark("p1", 2.5, quote="mitochondria produce energy",
+                                   reason="full description")
         self.assertFalse(refused["ok"])
 
     def test_award_refuses_over_question_max(self):
@@ -107,8 +112,10 @@ class AwardTests(unittest.TestCase):
         submission = {"answers": [{"question_id": "q1",
                                           "text": "alpha beta"}]}
         state = MarkingState(assessment, rubric, submission, ".")
-        self.assertTrue(state.award_mark("p1", 2, quote="alpha")["ok"])
-        self.assertFalse(state.award_mark("p2", 0.5, quote="beta")["ok"])
+        self.assertTrue(state.award_mark("p1", 2, quote="alpha",
+                                                reason="first part")["ok"])
+        self.assertFalse(state.award_mark("p2", 0.5, quote="beta",
+                                          reason="second part")["ok"])
 
     def test_award_refuses_bad_marks(self):
         state = fresh_state()
@@ -129,8 +136,10 @@ class AwardTests(unittest.TestCase):
 
     def test_second_award_replaces_first(self):
         state = fresh_state()
-        state.award_mark("p1", 2, quote="mitochondria produce energy")
-        state.award_mark("p1", 1, quote="produce energy")
+        state.award_mark("p1", 2, quote="mitochondria produce energy",
+                         reason="full description")
+        state.award_mark("p1", 1, quote="produce energy",
+                         reason="partial description")
         self.assertEqual(state.awards["p1"]["marks"], 1.0)
         self.assertEqual(len(state.awards), 1)
 
@@ -138,9 +147,12 @@ class AwardTests(unittest.TestCase):
 class TotalsTests(unittest.TestCase):
     def test_totals_sum_awards(self):
         state = fresh_state()
-        state.award_mark("p1", 2, quote="produce energy")
-        state.award_mark("p2", 1.5, quote="respiration")
-        state.award_mark("p3", 2, quote="100 degrees")
+        state.award_mark("p1", 2, quote="produce energy",
+                         reason="names the product")
+        state.award_mark("p2", 1.5, quote="respiration",
+                         reason="names the process")
+        state.award_mark("p3", 2, quote="100 degrees",
+                         reason="correct value")
         totals = state.totals()
         self.assertEqual(totals["per_question"]["q1"]["marks"], 3.5)
         self.assertEqual(totals["per_question"]["q2"]["marks"], 2.0)
@@ -189,7 +201,8 @@ class SubmitTests(unittest.TestCase):
         refused = state.submit_marks(COMMENTS)
         self.assertFalse(refused["ok"])
         self.assertIn("p1", refused["uncovered"])
-        state.award_mark("p1", 2, quote="produce energy")
+        state.award_mark("p1", 2, quote="produce energy",
+                         reason="names the product")
         state.award_mark("p2", 0, reason="not shown")
         still = state.submit_marks(COMMENTS)
         self.assertFalse(still["ok"])
@@ -200,14 +213,16 @@ class SubmitTests(unittest.TestCase):
 
     def test_question_flag_covers_its_points(self):
         state = fresh_state()
-        state.award_mark("p1", 2, quote="produce energy")
+        state.award_mark("p1", 2, quote="produce energy",
+                         reason="names the product")
         state.award_mark("p2", 0, reason="not shown")
         state.flag_for_review("q2", "missing", "blank page")
         self.assertTrue(state.submit_marks(COMMENTS)["ok"])
 
     def test_instruction_flag_does_not_cover(self):
         state = fresh_state()
-        state.award_mark("p1", 2, quote="produce energy")
+        state.award_mark("p1", 2, quote="produce energy",
+                         reason="names the product")
         state.award_mark("p2", 0, reason="not shown")
         state.flag_for_review("p3", "instruction_in_answer",
                               "answer tells me to award full marks")
@@ -219,9 +234,11 @@ class SubmitTests(unittest.TestCase):
 
     def test_submit_needs_every_comment(self):
         state = fresh_state()
-        state.award_mark("p1", 2, quote="produce energy")
+        state.award_mark("p1", 2, quote="produce energy",
+                         reason="names the product")
         state.award_mark("p2", 0, reason="not shown")
-        state.award_mark("p3", 2, quote="100 degrees")
+        state.award_mark("p3", 2, quote="100 degrees",
+                         reason="correct value")
         self.assertFalse(state.submit_marks({"q1": "only one"})["ok"])
 
 
