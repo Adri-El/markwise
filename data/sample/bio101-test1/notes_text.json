@@ -1,0 +1,74 @@
+[
+  {
+    "file": "bio101-notes.md",
+    "page": 1,
+    "text": "Diffusion is the net movement of particles from an area of high concentration\nto an area of low concentration, down a concentration gradient. It is a passive\nprocess: it needs no energy from the cell. Small molecules such as oxygen and\ncarbon dioxide diffuse freely across cell membranes. For example, oxygen\ndiffuses from the air in the alveoli, where its concentration is high, into\nthe blood, where its concentration is lower.",
+    "section": "Diffusion"
+  },
+  {
+    "file": "bio101-notes.md",
+    "page": 2,
+    "text": "Some larger or charged particles cannot pass directly through the membrane.\nThey diffuse down their concentration gradient through special channel or\ncarrier proteins. Like diffusion, facilitated diffusion needs no energy.",
+    "section": "Facilitated diffusion"
+  },
+  {
+    "file": "bio101-notes.md",
+    "page": 3,
+    "text": "Osmosis is the movement of water molecules across a partially permeable\nmembrane from an area of high water concentration to an area of low water\nconcentration (down a water potential gradient). The membrane lets water\nthrough but blocks most dissolved substances. If you place a raisin in pure\nwater, water moves into the raisin by osmosis and it swells. Plant root hair\ncells absorb water from the soil by osmosis.",
+    "section": "Osmosis"
+  },
+  {
+    "file": "bio101-notes.md",
+    "page": 4,
+    "text": "Active transport moves substances from an area of low concentration to an area\nof high concentration, against the concentration gradient. Unlike diffusion,\nit requires energy, which the cell supplies as ATP from respiration. Root hair\ncells use active transport to take up mineral ions from very dilute soil water.",
+    "section": "Active transport"
+  },
+  {
+    "file": "bio101-notes.md",
+    "page": 5,
+    "text": "Enzymes are proteins that act as biological catalysts: they speed up reactions\nwithout being used up, so each enzyme molecule can be reused many times. Every\nenzyme has an active site whose shape fits its substrate.",
+    "section": "2. Enzymes"
+  },
+  {
+    "file": "bio101-notes.md",
+    "page": 6,
+    "text": "In the induced-fit model, the substrate binds to the active site and the\nactive site changes shape slightly, moulding itself closely around the\nsubstrate. This strains the substrate's bonds, or holds two substrates\ntogether in exactly the right position, so the reaction happens far more\neasily. The products are then released and the enzyme is unchanged. (An older\nidea, the lock-and-key model, treated the active site as a rigid lock; we now\nknow it flexes \u2014 hence \"induced fit\".)",
+    "section": "The induced-fit model"
+  },
+  {
+    "file": "bio101-notes.md",
+    "page": 7,
+    "text": "Raising the temperature gives molecules more kinetic energy, so there are more\nfrequent successful collisions and the reaction rate rises \u2014 up to an optimum.\nAbove the optimum, the extra energy breaks the weak bonds that hold the\nenzyme's tertiary structure together. The active site loses its shape and the\nenzyme is said to be denatured. The substrate no longer fits, so the rate of\nan enzyme-controlled reaction falls sharply at high temperatures. Most human\nenzymes denature above about 40 \u00b0C.",
+    "section": "Effect of temperature"
+  },
+  {
+    "file": "bio101-notes.md",
+    "page": 8,
+    "text": "Each enzyme also has an optimum pH. Strongly acidic or alkaline conditions\ndisrupt the bonds in the enzyme and denature it. Pepsin works best around\npH 2 in the stomach, while amylase prefers near-neutral conditions in the\nmouth and small intestine.",
+    "section": "Effect of pH"
+  },
+  {
+    "file": "bio101-notes.md",
+    "page": 9,
+    "text": "Both plant and animal cells have a cell membrane, cytoplasm, a nucleus\ncontaining DNA, and mitochondria, where aerobic respiration releases energy.\n\nPlant cells have three structures that animal cells do not:\n\n- A cell wall made of cellulose, which supports and strengthens the cell.\n- Chloroplasts, which contain chlorophyll and trap light energy for\n  photosynthesis.\n- A large permanent vacuole filled with cell sap, which keeps the cell turgid.\n  Animal cells have only small, temporary vacuoles, if any.\n\nBecause of the wall and vacuole, plant cells are usually regular in shape,\nwhile animal cells vary. Do not confuse the cell wall with the cell membrane:\nboth cell types have a membrane, and only plants have the wall as well.",
+    "section": "3. Plant and animal cells"
+  },
+  {
+    "file": "bio101-notes.md",
+    "page": 10,
+    "text": "Blood carries oxygen, nutrients, hormones and waste around the body. It has\nfour main parts: red blood cells, white blood cells, platelets and plasma.",
+    "section": "4. Blood and transport"
+  },
+  {
+    "file": "bio101-notes.md",
+    "page": 11,
+    "text": "Mature red blood cells have no nucleus. Losing the nucleus leaves more room\nfor haemoglobin, the red pigment that binds oxygen, so each cell can carry\nmore oxygen. Red blood cells are also biconcave discs: this shape gives a\nlarge surface area for absorbing oxygen and lets the small, flexible cells\nsqueeze through narrow capillaries. They cannot divide or repair themselves,\nso they are replaced roughly every 120 days.",
+    "section": "Red blood cells"
+  },
+  {
+    "file": "bio101-notes.md",
+    "page": 12,
+    "text": "White blood cells defend against disease: some engulf pathogens\n(phagocytosis), others make antibodies. Platelets are cell fragments that\nhelp blood clot at a wound. Plasma is the pale liquid that carries dissolved\nglucose, amino acids, hormones, urea and plasma proteins.",
+    "section": "White blood cells, platelets and plasma"
+  }
+]

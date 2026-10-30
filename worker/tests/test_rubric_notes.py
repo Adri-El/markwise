@@ -12,7 +12,9 @@ from worker.agent import build_context
 from worker.notes import extract_notes, has_notes, load_notes_entries, search_notes
 from worker.rubric_agent import (
     RubricBuilderState,
+    any_n_requirement,
     build_builder_context,
+    check_any_n_warnings,
     question_has_scheme,
 )
 from worker.tools import check_rubric
@@ -375,6 +377,75 @@ class BuilderReferenceNoteTests(unittest.TestCase):
     def test_missing_reference_note_omitted(self):
         context = build_builder_context(ASSESSMENT, ENTRIES, False)
         self.assertNotIn("Reference note", context)
+
+
+ANY_ASSESSMENT = {
+    "id": "demo",
+    "title": "Demo",
+    "questions": [
+        {"id": "q3", "prompt": "State any two differences.", "max_marks": 4},
+    ],
+    "marking_scheme": {},
+}
+
+
+class AnyNDetectionTests(unittest.TestCase):
+    def test_word_and_digit_forms(self):
+        self.assertEqual(
+            any_n_requirement({"prompt": "State any two differences."}), 2)
+        self.assertEqual(
+            any_n_requirement({"prompt": "Name ANY 3 causes."}), 3)
+        self.assertEqual(
+            any_n_requirement({"prompt": "Give any five examples."}), 5)
+
+    def test_no_requirement(self):
+        self.assertIsNone(any_n_requirement({"prompt": "Define osmosis."}))
+        self.assertIsNone(any_n_requirement({"prompt": "Do anyone differs?"}))
+        self.assertIsNone(any_n_requirement({"prompt": "Name many parts."}))
+        self.assertIsNone(any_n_requirement({}))
+
+
+class AnyNCheckTests(unittest.TestCase):
+    def test_even_split_has_no_warnings(self):
+        points = [
+            {"id": "p1", "question_id": "q3", "max_marks": 2.0},
+            {"id": "p2", "question_id": "q3", "max_marks": 2.0},
+        ]
+        self.assertEqual(check_any_n_warnings(ANY_ASSESSMENT, points), [])
+
+    def test_uneven_split_warns_per_point(self):
+        points = [
+            {"id": "p1", "question_id": "q3", "max_marks": 2.0},
+            {"id": "p2", "question_id": "q3", "max_marks": 1.0},
+            {"id": "p3", "question_id": "q3", "max_marks": 1.0},
+        ]
+        warnings = check_any_n_warnings(ANY_ASSESSMENT, points)
+        self.assertEqual(len(warnings), 2)
+        self.assertIn("p2", warnings[0])
+        self.assertIn("p3", warnings[1])
+
+    def test_plain_question_has_no_warnings(self):
+        points = [{"id": "p1", "question_id": "q1", "max_marks": 2.0}]
+        self.assertEqual(check_any_n_warnings(ASSESSMENT, points), [])
+
+
+class FinishWarningsTests(unittest.TestCase):
+    def test_finish_succeeds_with_warnings(self):
+        state = RubricBuilderState(ANY_ASSESSMENT, ENTRIES)
+        state.add_point("q3", "cell wall", 2)
+        state.add_point("q3", "chloroplasts", 1)
+        state.add_point("q3", "vacuole", 1)
+        done = state.finish()
+        self.assertTrue(done["ok"])
+        self.assertEqual(len(done["warnings"]), 2)
+
+    def test_finish_omits_warnings_when_even(self):
+        state = RubricBuilderState(ANY_ASSESSMENT, ENTRIES)
+        state.add_point("q3", "cell wall", 2)
+        state.add_point("q3", "chloroplasts", 2)
+        done = state.finish()
+        self.assertTrue(done["ok"])
+        self.assertNotIn("warnings", done)
 
 
 if __name__ == "__main__":

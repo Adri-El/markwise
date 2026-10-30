@@ -1,0 +1,318 @@
+{
+  "students": [
+    {
+      "student": "s01",
+      "human_total": 20,
+      "agent_total": 19.0,
+      "difference": -1.0,
+      "status": "needs_review",
+      "flags": [
+        "p13:ambiguous",
+        "p17:ambiguous",
+        "p19:ambiguous"
+      ]
+    },
+    {
+      "student": "s02",
+      "human_total": 20,
+      "agent_total": 17.0,
+      "difference": -3.0,
+      "status": "needs_review",
+      "flags": [
+        "p13:ambiguous",
+        "p15:ambiguous",
+        "p17:ambiguous",
+        "p19:ambiguous"
+      ]
+    },
+    {
+      "student": "s03",
+      "human_total": 11,
+      "agent_total": 8.0,
+      "difference": -3.0,
+      "status": "marked",
+      "flags": []
+    },
+    {
+      "student": "s04",
+      "human_total": 7,
+      "agent_total": 6.0,
+      "difference": -1.0,
+      "status": "needs_review",
+      "flags": [
+        "p14:ambiguous"
+      ]
+    },
+    {
+      "student": "s05",
+      "human_total": 0,
+      "agent_total": 0.0,
+      "difference": 0.0,
+      "status": "marked",
+      "flags": []
+    },
+    {
+      "student": "s06",
+      "human_total": 2,
+      "agent_total": 0.0,
+      "difference": -2.0,
+      "status": "marked",
+      "flags": []
+    },
+    {
+      "student": "s07",
+      "human_total": 13,
+      "agent_total": 12.0,
+      "difference": -1.0,
+      "status": "needs_review",
+      "flags": [
+        "p4:ambiguous",
+        "p6:ambiguous",
+        "p9:ambiguous",
+        "p10:ambiguous",
+        "p17:ambiguous",
+        "p18:ambiguous"
+      ]
+    },
+    {
+      "student": "s08",
+      "human_total": 10,
+      "agent_total": 9.0,
+      "difference": -1.0,
+      "status": "needs_review",
+      "flags": [
+        "p13:ambiguous"
+      ]
+    },
+    {
+      "student": "s09",
+      "human_total": 18,
+      "agent_total": 16.5,
+      "difference": -1.5,
+      "status": "needs_review",
+      "flags": [
+        "p8:ambiguous",
+        "p17:ambiguous"
+      ]
+    },
+    {
+      "student": "s10",
+      "human_total": 17,
+      "agent_total": 15.0,
+      "difference": -2.0,
+      "status": "marked",
+      "flags": []
+    },
+    {
+      "student": "s11",
+      "human_total": 12,
+      "agent_total": 10.0,
+      "difference": -2.0,
+      "status": "needs_review",
+      "flags": [
+        "p4:ambiguous",
+        "p13:ambiguous",
+        "p18:ambiguous"
+      ]
+    },
+    {
+      "student": "s12",
+      "human_total": 2,
+      "agent_total": 0.0,
+      "difference": -2.0,
+      "status": "needs_review",
+      "flags": [
+        "q2:instruction_in_answer"
+      ]
+    }
+  ],
+  "missing": [],
+  "by_question": {
+    "q1": {
+      "n": 12,
+      "exact_rate": 0.08333333333333333,
+      "within1_rate": 0.75,
+      "mad": 1.1666666666666667
+    },
+    "q2": {
+      "n": 12,
+      "exact_rate": 0.9166666666666666,
+      "within1_rate": 1.0,
+      "mad": 0.041666666666666664
+    },
+    "q3": {
+      "n": 12,
+      "exact_rate": 0.75,
+      "within1_rate": 0.9166666666666666,
+      "mad": 0.3333333333333333
+    },
+    "q4": {
+      "n": 12,
+      "exact_rate": 0.6666666666666666,
+      "within1_rate": 0.9166666666666666,
+      "mad": 0.4166666666666667
+    }
+  },
+  "overall": {
+    "n_pairs": 48,
+    "exact_rate": 0.6041666666666666,
+    "within1_rate": 0.8958333333333334,
+    "mad_per_question": 0.4895833333333333,
+    "total_diff_over_2": [
+      "s02",
+      "s03"
+    ]
+  },
+  "disagreements": {
+    "items": [
+      {
+        "student": "s01",
+        "question": "q1",
+        "human": 4,
+        "agent": 3.0,
+        "flagged": false
+      },
+      {
+        "student": "s02",
+        "question": "q1",
+        "human": 4,
+        "agent": 3.0,
+        "flagged": false
+      },
+      {
+        "student": "s02",
+        "question": "q4",
+        "human": 4,
+        "agent": 2.0,
+        "flagged": true
+      },
+      {
+        "student": "s03",
+        "question": "q1",
+        "human": 3,
+        "agent": 1.0,
+        "flagged": false
+      },
+      {
+        "student": "s03",
+        "question": "q4",
+        "human": 2,
+        "agent": 1.0,
+        "flagged": false
+      },
+      {
+        "student": "s04",
+        "question": "q1",
+        "human": 3,
+        "agent": 1.0,
+        "flagged": false
+      },
+      {
+        "student": "s04",
+        "question": "q3",
+        "human": 0,
+        "agent": 2.0,
+        "flagged": true
+      },
+      {
+        "student": "s04",
+        "question": "q4",
+        "human": 1,
+        "agent": 0.0,
+        "flagged": false
+      },
+      {
+        "student": "s06",
+        "question": "q1",
+        "human": 1,
+        "agent": 0.0,
+        "flagged": false
+      },
+      {
+        "student": "s06",
+        "question": "q3",
+        "human": 1,
+        "agent": 0.0,
+        "flagged": false
+      },
+      {
+        "student": "s07",
+        "question": "q1",
+        "human": 4,
+        "agent": 3.0,
+        "flagged": true
+      },
+      {
+        "student": "s08",
+        "question": "q1",
+        "human": 4,
+        "agent": 3.0,
+        "flagged": false
+      },
+      {
+        "student": "s09",
+        "question": "q1",
+        "human": 4,
+        "agent": 3.0,
+        "flagged": false
+      },
+      {
+        "student": "s09",
+        "question": "q2",
+        "human": 7,
+        "agent": 6.5,
+        "flagged": true
+      },
+      {
+        "student": "s10",
+        "question": "q1",
+        "human": 4,
+        "agent": 3.0,
+        "flagged": false
+      },
+      {
+        "student": "s10",
+        "question": "q4",
+        "human": 3,
+        "agent": 2.0,
+        "flagged": false
+      },
+      {
+        "student": "s11",
+        "question": "q1",
+        "human": 4,
+        "agent": 3.0,
+        "flagged": true
+      },
+      {
+        "student": "s11",
+        "question": "q3",
+        "human": 2,
+        "agent": 1.0,
+        "flagged": true
+      },
+      {
+        "student": "s12",
+        "question": "q1",
+        "human": 2,
+        "agent": 0.0,
+        "flagged": false
+      }
+    ],
+    "flagged": 6,
+    "total": 19
+  },
+  "flag_check": {
+    "s12": {
+      "instruction_in_answer": "present"
+    }
+  },
+  "usage": {
+    "scripts": 12,
+    "input_tokens": 722671,
+    "output_tokens": 366854,
+    "total_tokens": 1089525,
+    "avg_tokens_per_script": 90793.75
+  },
+  "assessment_id": "bio101-test1"
+}

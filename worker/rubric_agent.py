@@ -5,6 +5,7 @@ code verifies source quotes, mark steps, and per-question coverage.
 """
 
 import json
+import re
 from pathlib import Path
 
 from .agent import (
@@ -28,6 +29,17 @@ Rules:
   it sets the points and the mark split. Use the notes only for source quotes
   and accept/reject notes.
 - Without a scheme, derive points and marks from the notes and the question.
+- "Any N of" questions (e.g. "name any two causes"): add one point per
+  acceptable alternative found in the notes, each worth question_max / N.
+  Their sum may exceed the question max; the question max caps the score.
+- Atomic points: one creditable idea per mark by default. Split a multi-mark
+  idea into 1-mark points unless the notes or the scheme clearly say one idea
+  is worth more. A multi-mark point with no clear split causes trouble later.
+- Accept/reject notes must be point-specific: equivalent wordings or common
+  misconceptions for that point, ideally grounded in the notes. Never copy
+  the reference note into accept/reject; the marker already receives it.
+- Relevance: every point must answer the question as asked. Do not add
+  points just because related material appears in the notes.
 - Every source_quote must appear word-for-word on the cited file and page;
   the tool rejects invented or misplaced quotes.
 - If a point cannot be supported by the notes or the scheme, still add it
@@ -43,6 +55,49 @@ def question_has_scheme(assessment, question_id):
     if not isinstance(scheme, dict):
         return False
     return bool(str(scheme.get(question_id) or "").strip())
+
+
+ANY_N_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+
+
+def any_n_requirement(question):
+    """Number N when the prompt asks for "any N" items, else None."""
+    prompt = str(question.get("prompt", ""))
+    match = re.search(r"\bany\s+(one|two|three|four|five|\d+)\b", prompt,
+                      re.IGNORECASE)
+    if not match:
+        return None
+    word = match.group(1).lower()
+    if word.isdigit():
+        return int(word) or None
+    return ANY_N_WORDS[word]
+
+
+def check_any_n_warnings(assessment, points):
+    """Warn when "any N" alternatives aren't each worth max_marks / N.
+
+    Warnings only: finish() still succeeds, so the lecturer sees them in
+    the transcript and the build summary instead of blocking the draft.
+    """
+    by_question = {}
+    for point in points:
+        by_question.setdefault(point["question_id"], []).append(point)
+    warnings = []
+    for question in assessment.get("questions", []):
+        required = any_n_requirement(question)
+        if not required:
+            continue
+        qmax = question.get("max_marks")
+        if not isinstance(qmax, (int, float)):
+            continue
+        expected = float(qmax) / required
+        for point in by_question.get(question["id"], []):
+            if abs(float(point["max_marks"]) - expected) > 1e-9:
+                warnings.append(
+                    "point %s: question asks for any %d but the point is "
+                    "worth %s instead of %s"
+                    % (point["id"], required, point["max_marks"], expected))
+    return warnings
 
 
 def build_builder_context(assessment, notes_entries, ignore_scheme):
@@ -188,7 +243,11 @@ class RubricBuilderState:
         errors = check_rubric(rubric, self.assessment)
         if errors:
             return {"ok": False, "error": "; ".join(errors), "errors": errors}
-        return {"ok": True, "points": self.points}
+        result = {"ok": True, "points": self.points}
+        warnings = check_any_n_warnings(self.assessment, self.points)
+        if warnings:
+            result["warnings"] = warnings
+        return result
 
 
 def get_builder_tool_schemas():
@@ -378,6 +437,7 @@ def build_rubric_with_agent(assessment, notes_entries, run_dir,
                     log.write(json.dumps(entry) + "\n")
                     return {
                         "points": tool_result["points"],
+                        "warnings": tool_result.get("warnings", []),
                         "usage": {"input_tokens": usage_in,
                                   "output_tokens": usage_out},
                         "turns": turns,

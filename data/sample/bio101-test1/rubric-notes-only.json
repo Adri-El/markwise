@@ -1,0 +1,344 @@
+{
+  "assessment_id": "bio101-test1",
+  "points": [
+    {
+      "id": "p1",
+      "question_id": "q1",
+      "description": "Diffusion is net movement of particles from high to low concentration down gradient",
+      "max_marks": 1.0,
+      "source_quote": "Diffusion is the net movement of particles from an area of high concentration\nto an area of low concentration, down a concentration gradient.",
+      "source_file": "bio101-notes.md",
+      "source_page": 1,
+      "source_section": "Diffusion",
+      "accept": [
+        "net movement down a concentration gradient",
+        "high to low concentration"
+      ],
+      "reject": [
+        "movement of water only",
+        "requires energy / active process"
+      ]
+    },
+    {
+      "id": "p2",
+      "question_id": "q1",
+      "description": "Diffusion is passive needing no energy from cell",
+      "max_marks": 1.0,
+      "source_quote": "It is a passive\nprocess: it needs no energy from the cell.",
+      "source_file": "bio101-notes.md",
+      "source_page": 1,
+      "source_section": "Diffusion",
+      "accept": [
+        "passive process",
+        "no ATP / no respiration needed"
+      ],
+      "reject": [
+        "requires energy",
+        "active transport"
+      ]
+    },
+    {
+      "id": "p3",
+      "question_id": "q1",
+      "description": "Osmosis is movement of water molecules across partially permeable membrane",
+      "max_marks": 1.0,
+      "source_quote": "Osmosis is the movement of water molecules across a partially permeable membrane",
+      "source_file": "bio101-notes.md",
+      "source_page": 3,
+      "source_section": "Osmosis",
+      "accept": [
+        "movement of water across selectively permeable membrane"
+      ],
+      "reject": [
+        "movement of any particles",
+        "across impermeable membrane"
+      ]
+    },
+    {
+      "id": "p4",
+      "question_id": "q1",
+      "description": "Osmosis moves water from high to low water concentration down gradient",
+      "max_marks": 1.0,
+      "source_quote": "from an area of high water concentration to an area of low water\nconcentration (down a water potential gradient).",
+      "source_file": "bio101-notes.md",
+      "source_page": 3,
+      "source_section": "Osmosis",
+      "accept": [
+        "high to low water concentration",
+        "down water potential gradient"
+      ],
+      "reject": [
+        "high to low solute concentration",
+        "against gradient"
+      ]
+    },
+    {
+      "id": "p5",
+      "question_id": "q2",
+      "description": "Substrate binds to enzyme active site (a)",
+      "max_marks": 1.0,
+      "subpart": "a",
+      "source_quote": "the substrate binds to the active site",
+      "source_file": "bio101-notes.md",
+      "source_page": 6,
+      "source_section": "The induced-fit model",
+      "accept": [
+        "substrate attaches to active site"
+      ],
+      "reject": [
+        "substrate binds elsewhere on enzyme"
+      ]
+    },
+    {
+      "id": "p6",
+      "question_id": "q2",
+      "description": "Active site changes shape slightly moulding around substrate (a)",
+      "max_marks": 1.0,
+      "subpart": "a",
+      "source_quote": "the active site changes shape slightly, moulding itself closely around the substrate.",
+      "source_file": "bio101-notes.md",
+      "source_page": 6,
+      "source_section": "The induced-fit model",
+      "accept": [
+        "active site moulds around substrate",
+        "active site flexes to fit substrate closely"
+      ],
+      "reject": [
+        "active site is rigid lock",
+        "active site does not change shape"
+      ]
+    },
+    {
+      "id": "p7",
+      "question_id": "q2",
+      "description": "Strains substrate bonds or holds two substrates in right position so reaction easier (a)",
+      "max_marks": 1.0,
+      "subpart": "a",
+      "source_quote": "This strains the substrate's bonds, or holds two substrates\ntogether in exactly the right position, so the reaction happens far more\neasily.",
+      "source_file": "bio101-notes.md",
+      "source_page": 6,
+      "source_section": "The induced-fit model",
+      "accept": [
+        "stresses substrate bonds to weaken them",
+        "brings two substrates together in correct orientation"
+      ],
+      "reject": [
+        "active site stays rigid",
+        "lowers optimum temperature"
+      ]
+    },
+    {
+      "id": "p8",
+      "question_id": "q2",
+      "description": "Products released and enzyme unchanged (a)",
+      "max_marks": 1.0,
+      "subpart": "a",
+      "source_quote": "The products are then released and the enzyme is unchanged.",
+      "source_file": "bio101-notes.md",
+      "source_page": 6,
+      "source_section": "The induced-fit model",
+      "accept": [
+        "products leave active site",
+        "enzyme remains unchanged and reusable"
+      ],
+      "reject": [
+        "enzyme used up",
+        "enzyme becomes product"
+      ]
+    },
+    {
+      "id": "p9",
+      "question_id": "q2",
+      "description": "Above optimum extra energy breaks weak bonds holding tertiary structure (b)",
+      "max_marks": 1.0,
+      "subpart": "b",
+      "source_quote": "Above the optimum, the extra energy breaks the weak bonds that hold the\nenzyme's tertiary structure together.",
+      "source_file": "bio101-notes.md",
+      "source_page": 7,
+      "source_section": "Effect of temperature",
+      "accept": [
+        "heat breaks weak bonds in enzyme",
+        "tertiary structure disrupted by heat"
+      ],
+      "reject": [
+        "strong covalent bonds broken",
+        "primary structure broken"
+      ]
+    },
+    {
+      "id": "p10",
+      "question_id": "q2",
+      "description": "Active site loses shape and enzyme denatured (b)",
+      "max_marks": 1.0,
+      "subpart": "b",
+      "source_quote": "The active site loses its shape and the\nenzyme is said to be denatured.",
+      "source_file": "bio101-notes.md",
+      "source_page": 7,
+      "source_section": "Effect of temperature",
+      "accept": [
+        "active site shape destroyed by heat",
+        "enzyme denatured"
+      ],
+      "reject": [
+        "enzyme killed / dies",
+        "enzyme denatured by low temperature"
+      ]
+    },
+    {
+      "id": "p11",
+      "question_id": "q2",
+      "description": "Substrate no longer fits into denatured active site (b)",
+      "max_marks": 1.0,
+      "subpart": "b",
+      "source_quote": "The substrate no longer fits, so the rate of\nan enzyme-controlled reaction falls sharply at high temperatures.",
+      "source_file": "bio101-notes.md",
+      "source_page": 7,
+      "source_section": "Effect of temperature",
+      "accept": [
+        "substrate cannot fit / attach to denatured active site"
+      ],
+      "reject": [
+        "substrate fits better at high temperature"
+      ]
+    },
+    {
+      "id": "p12",
+      "question_id": "q2",
+      "description": "Rate of enzyme-controlled reaction falls sharply at high temperatures (b)",
+      "max_marks": 1.0,
+      "subpart": "b",
+      "source_quote": "so the rate of\nan enzyme-controlled reaction falls sharply at high temperatures.",
+      "source_file": "bio101-notes.md",
+      "source_page": 7,
+      "source_section": "Effect of temperature",
+      "accept": [
+        "reaction slows at high temperature",
+        "sharp fall above optimum"
+      ],
+      "reject": [
+        "rate keeps rising with temperature",
+        "rate unaffected by denaturation"
+      ]
+    },
+    {
+      "id": "p13",
+      "question_id": "q3",
+      "description": "Plant cells have cellulose cell wall for support; animal cells do not",
+      "max_marks": 2.0,
+      "source_quote": "A cell wall made of cellulose, which supports and strengthens the cell.",
+      "source_file": "bio101-notes.md",
+      "source_page": 9,
+      "source_section": "3. Plant and animal cells",
+      "accept": [
+        "plant has cellulose wall, animal has none",
+        "only plants have wall for support/strength"
+      ],
+      "reject": [
+        "both have cell wall",
+        "cell membrane instead of wall",
+        "wall made of chitin"
+      ]
+    },
+    {
+      "id": "p14",
+      "question_id": "q3",
+      "description": "Plant cells have chloroplasts with chlorophyll for photosynthesis; animal cells do not",
+      "max_marks": 2.0,
+      "source_quote": "Chloroplasts, which contain chlorophyll and trap light energy for photosynthesis.",
+      "source_file": "bio101-notes.md",
+      "source_page": 9,
+      "source_section": "3. Plant and animal cells",
+      "accept": [
+        "plant has chloroplasts, animal does not",
+        "only plants trap light for photosynthesis"
+      ],
+      "reject": [
+        "both have chloroplasts",
+        "animal cells photosynthesise",
+        "chloroplasts for respiration"
+      ]
+    },
+    {
+      "id": "p15",
+      "question_id": "q3",
+      "description": "Plant cells have large permanent sap vacuole keeping cell turgid; animal cells have only small temporary vacuoles if any",
+      "max_marks": 2.0,
+      "source_quote": "- A large permanent vacuole filled with cell sap, which keeps the cell turgid.\n  Animal cells have only small, temporary vacuoles, if any.",
+      "source_file": "bio101-notes.md",
+      "source_page": 9,
+      "source_section": "3. Plant and animal cells",
+      "accept": [
+        "plants have large sap-filled vacuole, animals have small temporary ones",
+        "vacuole keeps plant cell turgid"
+      ],
+      "reject": [
+        "both have large permanent vacuole",
+        "vacuole for photosynthesis"
+      ]
+    },
+    {
+      "id": "p16",
+      "question_id": "q4",
+      "description": "Losing nucleus leaves more room for haemoglobin",
+      "max_marks": 1.0,
+      "source_quote": "Losing the nucleus leaves more room\nfor haemoglobin,",
+      "source_file": "bio101-notes.md",
+      "source_page": 11,
+      "source_section": "Red blood cells",
+      "accept": [
+        "more space for haemoglobin",
+        "room for haemoglobin after losing nucleus"
+      ],
+      "reject": [
+        "more room for oxygen directly",
+        "more room for mitochondria"
+      ]
+    },
+    {
+      "id": "p17",
+      "question_id": "q4",
+      "description": "Haemoglobin is red pigment that binds oxygen",
+      "max_marks": 1.0,
+      "source_quote": "for haemoglobin, the red pigment that binds oxygen,",
+      "source_file": "bio101-notes.md",
+      "source_page": 11,
+      "source_section": "Red blood cells",
+      "accept": [
+        "red pigment binds O2",
+        "haemoglobin carries oxygen"
+      ],
+      "reject": [
+        "haemoglobin binds carbon dioxide",
+        "haemoglobin for photosynthesis"
+      ]
+    },
+    {
+      "id": "p18",
+      "question_id": "q4",
+      "description": "So each cell can carry more oxygen",
+      "max_marks": 1.0,
+      "source_quote": "so each cell can carry\nmore oxygen.",
+      "source_file": "bio101-notes.md",
+      "source_page": 11,
+      "source_section": "Red blood cells",
+      "accept": [
+        "carries extra oxygen per cell",
+        "increased oxygen capacity"
+      ],
+      "reject": [
+        "carries more carbon dioxide",
+        "carries more haemoglobin (without oxygen link)"
+      ]
+    },
+    {
+      "id": "p19",
+      "question_id": "q4",
+      "description": "Links loss of nucleus to small flexible size for squeezing through capillaries",
+      "max_marks": 1.0,
+      "accept": [],
+      "reject": [],
+      "needs_lecturer": true,
+      "reason": "Notes link squeezing through capillaries to biconcave shape, not to loss of nucleus; need lecturer confirmation if this link is creditable"
+    }
+  ]
+}

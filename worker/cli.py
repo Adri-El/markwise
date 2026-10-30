@@ -59,6 +59,11 @@ def _save_rubric(assessment, points, rubric_path):
     return 0
 
 
+def _rubric_run_dir(runs_dir, assessment_id, stamp):
+    return (Path(runs_dir)
+            / ("%s_rubric_%s" % (assessment_id, stamp)))
+
+
 def _build_rubric_from_notes(assessment_dir, assessment, rubric_path,
                              ignore_scheme):
     from .notes import extract_notes
@@ -72,8 +77,8 @@ def _build_rubric_from_notes(assessment_dir, assessment, rubric_path,
         print("warning: no extractable text (scanned?): %s p.%s"
               % (page["file"], page["page"]))
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = (Path("worker") / "runs"
-               / "%s_rubric_%s" % (assessment.get("id"), stamp))
+    run_dir = _rubric_run_dir(
+        Path("worker") / "runs", assessment.get("id"), stamp)
     try:
         result = build_rubric_with_agent(
             assessment, entries, run_dir, ignore_scheme=ignore_scheme)
@@ -95,6 +100,8 @@ def _build_rubric_from_notes(assessment_dir, assessment, rubric_path,
     needy = sum(1 for point in points if point.get("needs_lecturer"))
     print("rubric: %d points (%s); %d with notes source, %d need lecturer"
           % (len(points), per_question, sourced, needy))
+    for warning in result.get("warnings", []):
+        print("warning: %s" % warning)
     print("wrote %s" % rubric_path)
     print("transcript: %s" % (run_dir / "transcript.jsonl"))
     usage = result["usage"]
