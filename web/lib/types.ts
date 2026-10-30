@@ -1,0 +1,43 @@
+export type Role = "lecturer" | "student";
+export type AssessmentKind = "assignment" | "test" | "exam";
+export type AnswerMode = "typed" | "pdf";
+
+export interface Profile {
+  id: string;
+  role: Role;
+  full_name: string;
+  matric_number: string | null;
+}
+
+export interface Assessment {
+  id: string;
+  lecturer_id: string;
+  title: string;
+  kind: AssessmentKind;
+  instructions: string;
+  opens_at: string | null;
+  closes_at: string | null;
+  answer_mode: AnswerMode;
+  join_code: string;
+  created_at: string;
+}
+
+export interface Subpart {
+  id: string;
+  max_marks: number;
+}
+
+export interface Question {
+  id: string;
+  assessment_id: string;
+  code: string;
+  position: number;
+  prompt: string;
+  max_marks: number;
+  subparts: Subpart[];
+}
+
+export interface MarkingScheme {
+  question_id: string;
+  scheme: string;
+}

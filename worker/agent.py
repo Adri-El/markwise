@@ -61,6 +61,16 @@ def build_context(assessment, rubric):
             if isinstance(notes, list) and notes:
                 lines.append("    %s: %s"
                              % (label, "; ".join(str(n) for n in notes)))
+        quote = p.get("source_quote")
+        if isinstance(quote, str) and quote.strip():
+            short = " ".join(str(quote).split())
+            if len(short) > 80:
+                short = short[:77] + "..."
+            cite = "Notes %s p.%s" % (p.get("source_file", "?"),
+                                      p.get("source_page", "?"))
+            if p.get("source_section"):
+                cite += " [%s]" % p["source_section"]
+            lines.append('    %s: "%s"' % (cite, short))
     scheme = assessment.get("marking_scheme")
     if scheme:
         lines.append("Marking scheme (lecturer guidance): %s" % scheme)

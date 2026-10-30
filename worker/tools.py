@@ -41,6 +41,20 @@ def quotes_similar(a, b):
     return len(sa & sb) / min(len(sa), len(sb)) >= 0.8
 
 
+def extract_pdf_pages(pdf_path):
+    """Text of each PDF page in order ("" when a page is unreadable)."""
+    from pypdf import PdfReader
+
+    reader = PdfReader(str(pdf_path))
+    pages = []
+    for page in reader.pages:
+        try:
+            pages.append(page.extract_text() or "")
+        except Exception:
+            pages.append("")
+    return pages
+
+
 def is_half_mark(value):
     """Non-negative multiple of 0.5 (numbers only, bools excluded)."""
     if isinstance(value, bool):
@@ -85,6 +99,37 @@ def check_rubric(rubric, assessment):
                     or not all(isinstance(n, str) for n in notes)):
                 errors.append(
                     "%s (%s): %s must be a list of strings" % (where, pid, key))
+        trio = (p.get("source_quote"), p.get("source_file"), p.get("source_page"))
+        if any(v is not None for v in trio):
+            quote, fname, page = trio
+            if not (isinstance(quote, str) and quote.strip()):
+                errors.append(
+                    "%s (%s): source_quote must be a non-empty string"
+                    % (where, pid))
+            if not (isinstance(fname, str) and fname.strip()):
+                errors.append(
+                    "%s (%s): source_file must be a non-empty string"
+                    % (where, pid))
+            if not (isinstance(page, int) and not isinstance(page, bool)
+                    and page >= 1):
+                errors.append(
+                    "%s (%s): source_page must be a positive integer"
+                    % (where, pid))
+        section = p.get("source_section")
+        if section is not None and not (isinstance(section, str)
+                                        and section.strip()):
+            errors.append(
+                "%s (%s): source_section must be a non-empty string"
+                % (where, pid))
+        needs = p.get("needs_lecturer", False)
+        if not isinstance(needs, bool):
+            errors.append(
+                "%s (%s): needs_lecturer must be true or false" % (where, pid))
+        elif needs and not (isinstance(p.get("reason"), str)
+                            and p.get("reason").strip()):
+            errors.append(
+                "%s (%s): reason is required when needs_lecturer is true"
+                % (where, pid))
         if not is_half_mark(max_marks) or max_marks <= 0:
             errors.append(
                 "%s (%s): max_marks must be a positive multiple of 0.5" % (where, pid)
@@ -157,17 +202,11 @@ class MarkingState:
 
     @staticmethod
     def _extract_pdf_text(pdf_path):
-        from pypdf import PdfReader
-
-        reader = PdfReader(str(pdf_path))
-        pages = []
-        for i, page in enumerate(reader.pages, start=1):
-            try:
-                text = page.extract_text() or ""
-            except Exception:
-                text = ""
-            pages.append("[page %d]\n%s" % (i, text))
-        return "\n\n".join(pages)
+        pages = extract_pdf_pages(pdf_path)
+        return "\n\n".join(
+            "[page %d]\n%s" % (i, text)
+            for i, text in enumerate(pages, start=1)
+        )
 
     # -- awards --
 

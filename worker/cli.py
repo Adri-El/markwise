@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .agent import _client_from_env, _model_from_env, _responses_create
+from .notes import has_notes
 from .tools import check_rubric
 
 RUBRIC_SYSTEM = """You convert a lecturer's marking scheme into marking points.
@@ -44,10 +45,68 @@ def _extract_points(text):
     return data.get("points", [])
 
 
+def _save_rubric(assessment, points, rubric_path):
+    """Validate and write a rubric file. Returns an exit code."""
+    rubric = {"assessment_id": assessment.get("id"), "points": points}
+    errors = check_rubric(rubric, assessment)
+    if errors:
+        print("invalid rubric:", file=sys.stderr)
+        for error in errors:
+            print("- %s" % error, file=sys.stderr)
+        return 1
+    rubric_path.parent.mkdir(parents=True, exist_ok=True)
+    rubric_path.write_text(json.dumps(rubric, indent=2))
+    return 0
+
+
+def _build_rubric_from_notes(assessment_dir, assessment, rubric_path,
+                             ignore_scheme):
+    from .notes import extract_notes
+    from .rubric_agent import build_rubric_with_agent
+
+    entries, unreadable = extract_notes(
+        assessment_dir / "notes", assessment_dir / "notes_text.json")
+    files = sorted({entry["file"] for entry in entries})
+    print("notes: %d page(s) from %d file(s)" % (len(entries), len(files)))
+    for page in unreadable:
+        print("warning: no extractable text (scanned?): %s p.%s"
+              % (page["file"], page["page"]))
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = (Path("worker") / "runs"
+               / "%s_rubric_%s" % (assessment.get("id"), stamp))
+    try:
+        result = build_rubric_with_agent(
+            assessment, entries, run_dir, ignore_scheme=ignore_scheme)
+    except Exception as exc:
+        print("rubric agent failed: %s" % exc, file=sys.stderr)
+        return 1
+    points = result["points"]
+    code = _save_rubric(assessment, points, rubric_path)
+    if code:
+        return code
+    counts = {}
+    for point in points:
+        counts[point["question_id"]] = counts.get(point["question_id"], 0) + 1
+    per_question = ", ".join(
+        "%s: %d" % (qid, counts[qid])
+        for qid in [q["id"] for q in assessment.get("questions", [])]
+        if qid in counts)
+    sourced = sum(1 for point in points if point.get("source_file"))
+    needy = sum(1 for point in points if point.get("needs_lecturer"))
+    print("rubric: %d points (%s); %d with notes source, %d need lecturer"
+          % (len(points), per_question, sourced, needy))
+    print("wrote %s" % rubric_path)
+    print("transcript: %s" % (run_dir / "transcript.jsonl"))
+    usage = result["usage"]
+    print("tokens: %d in, %d out"
+          % (usage["input_tokens"], usage["output_tokens"]))
+    return 0
+
+
 def cmd_build_rubric(args):
     assessment_dir = Path(args.assessment_dir)
     assessment_path = assessment_dir / "assessment.json"
-    rubric_path = assessment_dir / "rubric.json"
+    rubric_path = Path(args.out) if args.out else assessment_dir / "rubric.json"
     if not assessment_path.exists():
         print("missing %s" % assessment_path, file=sys.stderr)
         return 2
@@ -56,6 +115,9 @@ def cmd_build_rubric(args):
               file=sys.stderr)
         return 2
     assessment = load_json(assessment_path)
+    if has_notes(assessment_dir / "notes"):
+        return _build_rubric_from_notes(
+            assessment_dir, assessment, rubric_path, args.ignore_scheme)
     user_content = "Questions: %s\nMarking scheme: %s" % (
         json.dumps(assessment.get("questions", [])),
         json.dumps(assessment.get("marking_scheme", "")),
@@ -85,14 +147,9 @@ def cmd_build_rubric(args):
     except ValueError:
         print("model did not return valid JSON", file=sys.stderr)
         return 1
-    rubric = {"assessment_id": assessment.get("id"), "points": points}
-    errors = check_rubric(rubric, assessment)
-    if errors:
-        print("invalid rubric:", file=sys.stderr)
-        for error in errors:
-            print("- %s" % error, file=sys.stderr)
-        return 1
-    rubric_path.write_text(json.dumps(rubric, indent=2))
+    code = _save_rubric(assessment, points, rubric_path)
+    if code:
+        return code
     print("wrote %s (%d points)" % (rubric_path, len(points)))
     return 0
 
@@ -143,7 +200,7 @@ def cmd_mark_one(args):
 def cmd_mark_all(args):
     assessment_dir = Path(args.assessment_dir)
     assessment = load_json(assessment_dir / "assessment.json")
-    rubric_path = assessment_dir / "rubric.json"
+    rubric_path = Path(args.rubric) if args.rubric else assessment_dir / "rubric.json"
     if not rubric_path.exists():
         print("refusing to start: missing %s (run build-rubric first)"
               % rubric_path, file=sys.stderr)
@@ -223,7 +280,7 @@ def cmd_check_consistency(args):
 
     assessment_dir = Path(args.assessment_dir)
     assessment = load_json(assessment_dir / "assessment.json")
-    rubric_path = assessment_dir / "rubric.json"
+    rubric_path = Path(args.rubric) if args.rubric else assessment_dir / "rubric.json"
     if not rubric_path.exists():
         print("missing %s (run build-rubric first)" % rubric_path,
               file=sys.stderr)
@@ -256,6 +313,10 @@ def main(argv=None):
     build.add_argument("assessment_dir")
     build.add_argument("--force", action="store_true",
                        help="overwrite an existing rubric.json")
+    build.add_argument("--ignore-scheme", action="store_true",
+                       help="draft from notes only, ignoring any scheme")
+    build.add_argument("--out",
+                       help="write the rubric here instead of rubric.json")
     build.set_defaults(func=cmd_build_rubric)
 
     one = sub.add_parser("mark-one", help="mark one submission")
@@ -269,12 +330,16 @@ def main(argv=None):
     all_cmd.add_argument("--runs-dir", default=str(Path("worker") / "runs"))
     all_cmd.add_argument("--workers", type=int, default=4,
                          help="parallel marking threads (default 4)")
+    all_cmd.add_argument("--rubric",
+                         help="use this rubric file instead of rubric.json")
     all_cmd.set_defaults(func=cmd_mark_all)
 
     check = sub.add_parser("check-consistency",
                            help="consistency check over latest runs")
     check.add_argument("assessment_dir")
     check.add_argument("--runs-dir", default=str(Path("worker") / "runs"))
+    check.add_argument("--rubric",
+                       help="use this rubric file instead of rubric.json")
     check.set_defaults(func=cmd_check_consistency)
 
     args = parser.parse_args(argv)

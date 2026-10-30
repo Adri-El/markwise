@@ -56,9 +56,11 @@ def latest_runs(assessment_id):
     return {student: result for student, (_, result) in runs.items()}
 
 
-def point_question_map(assessment_id):
+def point_question_map(assessment_id, rubric_path=None):
     """Map rubric point id -> question id (empty when no rubric)."""
-    path = ROOT / "data" / "sample" / assessment_id / "rubric.json"
+    if rubric_path is None:
+        rubric_path = ROOT / "data" / "sample" / assessment_id / "rubric.json"
+    path = Path(rubric_path)
     try:
         with path.open() as f:
             points = json.load(f).get("points", [])
@@ -239,11 +241,21 @@ def report_text(assessment_id, summary):
 
 
 def main(argv):
-    if len(argv) != 2:
-        print("usage: python evals/run_eval.py <assessment_id>",
+    args = list(argv[1:])
+    rubric_path = None
+    if "--rubric" in args:
+        i = args.index("--rubric")
+        if i + 1 >= len(args):
+            print("usage: python evals/run_eval.py <assessment_id> [--rubric <file>]",
+                  file=sys.stderr)
+            return 2
+        rubric_path = args[i + 1]
+        del args[i:i + 2]
+    if len(args) != 1:
+        print("usage: python evals/run_eval.py <assessment_id> [--rubric <file>]",
               file=sys.stderr)
         return 2
-    assessment_id = argv[1]
+    assessment_id = args[0]
     try:
         human_marks, expected_flags = load_ground_truth(assessment_id)
     except OSError:
@@ -251,7 +263,7 @@ def main(argv):
         return 1
     runs = latest_runs(assessment_id)
     summary = evaluate(human_marks, expected_flags, runs,
-                         point_question_map(assessment_id))
+                         point_question_map(assessment_id, rubric_path))
     summary["assessment_id"] = assessment_id
     print(report_text(assessment_id, summary), end="")
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
