@@ -3,9 +3,23 @@
 import { useState } from "react";
 import { signIn, signUp } from "@/lib/actions/auth";
 import type { Role } from "@/lib/types";
+import Button from "./ui/Button";
+import FieldError from "./ui/FieldError";
+import Input from "./ui/Input";
+import Label from "./ui/Label";
 
-const input =
-  "w-full border border-neutral-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600";
+const roles: { value: Role; title: string; blurb: string }[] = [
+  {
+    value: "student",
+    title: "Student",
+    blurb: "Join with a code, submit answers",
+  },
+  {
+    value: "lecturer",
+    title: "Lecturer",
+    blurb: "Set assessments, review marks",
+  },
+];
 
 export default function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const [role, setRole] = useState<Role | "">("");
@@ -56,93 +70,79 @@ export default function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4 max-w-sm">
+    <form onSubmit={onSubmit} className="space-y-4">
       {mode === "sign-up" && (
-        <div className="flex gap-4 text-sm">
-          {(["student", "lecturer"] as Role[]).map((r) => (
-            <label
-              key={r}
-              htmlFor={`auth-role-${r}`}
-              className="flex items-center gap-2"
+        <div
+          role="radiogroup"
+          aria-label="Account type"
+          className="grid grid-cols-2 gap-3"
+        >
+          {roles.map((r) => (
+            <button
+              key={r.value}
+              type="button"
+              role="radio"
+              aria-checked={role === r.value}
+              onClick={() => setRole(r.value)}
+              className={
+                `rounded-lg border p-4 text-left transition-colors ${
+                  role === r.value
+                    ? "border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-600/30"
+                    : "border-slate-300 bg-white hover:border-slate-400"
+                }`
+              }
             >
-              <input
-                id={`auth-role-${r}`}
-                type="radio"
-                name="role"
-                value={r}
-                checked={role === r}
-                onChange={() => setRole(r)}
-              />
-              {r === "student" ? "Student" : "Lecturer"}
-            </label>
+              <span className="block text-sm font-semibold text-slate-900">
+                {r.title}
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-600">
+                {r.blurb}
+              </span>
+            </button>
           ))}
         </div>
       )}
       {mode === "sign-up" && role === "student" && (
         <>
           <div>
-            <label htmlFor="auth-fullname" className="block text-sm font-medium mb-1">
-              Full name
-            </label>
-            <input
+            <Label htmlFor="auth-fullname">Full name</Label>
+            <Input
               id="auth-fullname"
               name="fullName"
               placeholder="Full name"
-              className={input}
               autoComplete="name"
             />
           </div>
           <div>
-            <label htmlFor="auth-matric" className="block text-sm font-medium mb-1">
-              Matric number
-            </label>
-            <input
-              id="auth-matric"
-              name="matric"
-              placeholder="Matric number"
-              className={input}
-            />
+            <Label htmlFor="auth-matric">Matric number</Label>
+            <Input id="auth-matric" name="matric" placeholder="Matric number" />
           </div>
         </>
       )}
       <div>
-        <label htmlFor="auth-email" className="block text-sm font-medium mb-1">
-          Email
-        </label>
-        <input
+        <Label htmlFor="auth-email">Email</Label>
+        <Input
           id="auth-email"
           name="email"
           type="email"
           placeholder="Email"
-          className={input}
           autoComplete="email"
         />
       </div>
       <div>
-        <label htmlFor="auth-password" className="block text-sm font-medium mb-1">
-          Password
-        </label>
-        <input
+        <Label htmlFor="auth-password">Password</Label>
+        <Input
           id="auth-password"
           name="password"
           type="password"
           placeholder="Password"
-          className={input}
           autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
         />
       </div>
-      {error && <p className="text-sm text-red-700">{error}</p>}
-      <button
-        type="submit"
-        disabled={pending}
-        className="bg-neutral-900 text-white text-sm rounded px-4 py-2 disabled:opacity-50"
-      >
-        {pending
-          ? "Please wait…"
-          : mode === "sign-up"
-            ? "Create account"
-            : "Sign in"}
-      </button>
+      <FieldError message={error} />
+      <Button type="submit" loading={pending} className="w-full">
+        {mode === "sign-up" ? "Create account" : "Sign in"}
+      </Button>
     </form>
   );
 }

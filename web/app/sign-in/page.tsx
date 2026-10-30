@@ -1,4 +1,5 @@
 import AuthForm from "@/components/AuthForm";
+import Card from "@/components/ui/Card";
 
 export default async function SignInPage({
   searchParams,
@@ -7,20 +8,26 @@ export default async function SignInPage({
 }) {
   const { notice } = await searchParams;
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Sign in</h1>
-      {notice === "check-email" && (
-        <p className="text-sm text-neutral-700">
-          Account created. Check your email to confirm it, then sign in.
-        </p>
-      )}
-      <AuthForm mode="sign-in" />
-      <p className="text-sm">
-        No account?{" "}
-        <a href="/sign-up" className="underline">
-          Sign up
-        </a>
-      </p>
+    <div className="mx-auto max-w-md">
+      <Card title="Sign in">
+        <div className="space-y-4">
+          {notice === "check-email" && (
+            <p className="text-sm text-slate-700">
+              Account created. Check your email to confirm it, then sign in.
+            </p>
+          )}
+          <AuthForm mode="sign-in" />
+          <p className="text-sm text-slate-600">
+            No account?{" "}
+            <a
+              href="/sign-up"
+              className="font-medium text-indigo-600 hover:underline"
+            >
+              Sign up
+            </a>
+          </p>
+        </div>
+      </Card>
     </div>
   );
 }

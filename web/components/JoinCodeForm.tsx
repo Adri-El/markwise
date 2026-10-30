@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { joinByCode } from "@/lib/actions/enrollments";
+import Button from "./ui/Button";
+import FieldError from "./ui/FieldError";
+import Input from "./ui/Input";
 
 export default function JoinCodeForm() {
   const router = useRouter();
@@ -41,28 +44,26 @@ export default function JoinCodeForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex gap-2 items-start max-w-sm">
-      <label htmlFor="join-code" className="sr-only">
-        Join code
-      </label>
-      <input
-        id="join-code"
-        name="code"
-        placeholder="Join code"
-        autoComplete="off"
-        className="flex-1 border border-neutral-300 rounded px-3 py-2 text-sm uppercase focus:outline-none focus:border-neutral-600"
-      />
-      <button
-        type="submit"
-        disabled={pending}
-        className="bg-neutral-900 text-white text-sm rounded px-4 py-2 disabled:opacity-50"
-      >
-        {pending ? "…" : "Join"}
-      </button>
-      {message && (
-        <p className={`text-sm ${isError ? "text-red-700" : "text-green-700"}`}>
-          {message}
-        </p>
+    <form onSubmit={onSubmit} className="max-w-sm space-y-2">
+      <div className="flex gap-2">
+        <label htmlFor="join-code" className="sr-only">
+          Join code
+        </label>
+        <Input
+          id="join-code"
+          name="code"
+          placeholder="Join code"
+          autoComplete="off"
+          className="uppercase"
+        />
+        <Button type="submit" loading={pending}>
+          Join
+        </Button>
+      </div>
+      {isError ? (
+        <FieldError message={message} />
+      ) : (
+        message && <p className="text-sm text-green-700">{message}</p>
       )}
     </form>
   );

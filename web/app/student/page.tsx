@@ -1,8 +1,15 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Assessment } from "@/lib/types";
+import Badge from "@/components/ui/Badge";
+import Card from "@/components/ui/Card";
 import JoinCodeForm from "@/components/JoinCodeForm";
-import SignOutButton from "@/components/SignOutButton";
+import LocalDateTime from "@/components/LocalDateTime";
+import StatusBadge from "@/components/StatusBadge";
+
+function capitalize(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
 
 export default async function StudentDashboard() {
   const profile = await requireRole("student");
@@ -19,27 +26,32 @@ export default async function StudentDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Your assessments</h1>
-        <SignOutButton />
-      </div>
-      <div className="space-y-2">
-        <h2 className="text-sm font-semibold">Join with a code</h2>
+      <h1 className="text-xl font-semibold text-slate-900">Your assessments</h1>
+      <Card title="Join with a code">
         <JoinCodeForm />
-      </div>
+      </Card>
       {assessments.length === 0 ? (
-        <p className="text-neutral-700 text-sm">
+        <p className="text-sm text-slate-600">
           You haven&apos;t joined anything yet.
         </p>
       ) : (
-        <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {assessments.map((a) => (
-            <li key={a.id} className="py-3">
-              <p className="font-medium">{a.title}</p>
-              <p className="text-sm text-neutral-600">{a.kind}</p>
-            </li>
+            <Card key={a.id}>
+              <div className="space-y-2">
+                <p className="font-medium text-slate-900">{a.title}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone="info">{capitalize(a.kind)}</Badge>
+                  <StatusBadge opensAt={a.opens_at} closesAt={a.closes_at} />
+                </div>
+                <p className="text-sm text-slate-600">
+                  {a.kind === "assignment" ? "Due " : "Closes "}
+                  <LocalDateTime value={a.closes_at} />
+                </p>
+              </div>
+            </Card>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

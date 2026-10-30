@@ -1,7 +1,16 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Assessment } from "@/lib/types";
-import SignOutButton from "@/components/SignOutButton";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import Card from "@/components/ui/Card";
+import CopyButton from "@/components/CopyButton";
+import LocalDateTime from "@/components/LocalDateTime";
+import StatusBadge from "@/components/StatusBadge";
+
+function capitalize(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
 
 export default async function LecturerDashboard() {
   const profile = await requireRole("lecturer");
@@ -15,43 +24,50 @@ export default async function LecturerDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Your assessments</h1>
-        <SignOutButton />
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-xl font-semibold text-slate-900">
+          Your assessments
+        </h1>
+        <Button href="/lecturer/assessments/new">New assessment</Button>
       </div>
-      <p>
-        <a
-          href="/lecturer/assessments/new"
-          className="bg-neutral-900 text-white text-sm rounded px-4 py-2 inline-block"
-        >
-          New assessment
-        </a>
-      </p>
       {assessments.length === 0 ? (
-        <p className="text-neutral-700 text-sm">
-          Nothing here yet. Create your first assessment above.
-        </p>
+        <Card title="Nothing here yet">
+          <p className="text-sm text-slate-600">
+            Create your first assessment to get a join code for your students.
+          </p>
+          <div className="mt-4">
+            <Button href="/lecturer/assessments/new">New assessment</Button>
+          </div>
+        </Card>
       ) : (
-        <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {assessments.map((a) => (
-            <li
-              key={a.id}
-              className="py-3 flex items-center justify-between gap-4"
-            >
-              <div>
+            <Card key={a.id}>
+              <div className="space-y-2">
                 <a
                   href={`/lecturer/assessments/${a.id}`}
-                  className="font-medium underline"
+                  className="font-medium text-indigo-600 hover:underline"
                 >
                   {a.title}
                 </a>
-                <p className="text-sm text-neutral-600">
-                  {a.kind} · code {a.join_code}
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone="info">{capitalize(a.kind)}</Badge>
+                  <StatusBadge opensAt={a.opens_at} closesAt={a.closes_at} />
+                </div>
+                <p className="text-sm text-slate-600">
+                  {a.kind === "assignment" ? "Due " : "Closes "}
+                  <LocalDateTime value={a.closes_at} />
                 </p>
+                <div className="flex items-center gap-2">
+                  <code className="rounded bg-slate-100 px-2 py-1 font-mono text-sm text-slate-900">
+                    {a.join_code}
+                  </code>
+                  <CopyButton text={a.join_code} />
+                </div>
               </div>
-            </li>
+            </Card>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );
