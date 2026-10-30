@@ -2,6 +2,8 @@ export type Role = "lecturer" | "student";
 export type AssessmentKind = "assignment" | "test" | "exam";
 export type AnswerMode = "typed" | "pdf";
 
+export const MAX_ANSWER_CHARS = 20_000;
+
 export interface Profile {
   id: string;
   role: Role;
@@ -51,4 +53,23 @@ export interface CourseNote {
   size_bytes: number;
   uploaded_by: string;
   created_at: string;
+}
+
+export interface Submission {
+  id: string;
+  assessment_id: string;
+  student_id: string;
+  status: "draft" | "submitted";
+  submitted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Answer {
+  id: string;
+  submission_id: string;
+  question_id: string;
+  text: string;
+  pdf_path: string | null;
+  updated_at: string;
 }

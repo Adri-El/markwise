@@ -1,14 +1,25 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import type { Assessment } from "@/lib/types";
+import { isPast } from "@/lib/schedule";
+import type { Assessment, Submission } from "@/lib/types";
 import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
 import JoinCodeForm from "@/components/JoinCodeForm";
 import LocalDateTime from "@/components/LocalDateTime";
-import StatusBadge from "@/components/StatusBadge";
 
 function capitalize(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+function isOpen(a: Assessment, now: number): boolean {
+  const opened = a.opens_at === null || new Date(a.opens_at).getTime() <= now;
+  const notClosed =
+    a.closes_at === null || new Date(a.closes_at).getTime() >= now;
+  return opened && notClosed;
+}
+
+function isClosed(a: Assessment): boolean {
+  return a.closes_at !== null && isPast(a.closes_at);
 }
 
 export default async function StudentDashboard() {
@@ -16,13 +27,25 @@ export default async function StudentDashboard() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("enrollments")
-    .select("assessment:assessments(id, title, kind, opens_at, closes_at)")
+    .select(
+      "assessment:assessments(id, title, kind, opens_at, closes_at, answer_mode)",
+    )
     .eq("student_id", profile.id);
   const assessments = ((data ?? []) as unknown as {
     assessment: Assessment | Assessment[];
   }[]).map((row) =>
     Array.isArray(row.assessment) ? row.assessment[0] : row.assessment,
   );
+  const { data: submissions } = await supabase
+    .from("submissions")
+    .select("assessment_id, status")
+    .eq("student_id", profile.id);
+  const statusByAssessment = new Map(
+    ((submissions ?? []) as Pick<Submission, "assessment_id" | "status">[]).map(
+      (s) => [s.assessment_id, s.status],
+    ),
+  );
+  const now = Date.now();
 
   return (
     <div className="space-y-6">
@@ -36,21 +59,42 @@ export default async function StudentDashboard() {
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {assessments.map((a) => (
-            <Card key={a.id}>
-              <div className="space-y-2">
-                <p className="font-medium text-slate-900">{a.title}</p>
-                <div className="flex flex-wrap gap-2">
-                  <Badge tone="info">{capitalize(a.kind)}</Badge>
-                  <StatusBadge opensAt={a.opens_at} closesAt={a.closes_at} />
+          {assessments.map((a) => {
+            const submitted =
+              statusByAssessment.get(a.id) === "submitted";
+            return (
+              <Card key={a.id}>
+                <div className="space-y-2">
+                  <a
+                    href={`/student/assessments/${a.id}`}
+                    className="font-medium text-indigo-600 hover:underline"
+                  >
+                    {a.title}
+                  </a>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge tone="info">{capitalize(a.kind)}</Badge>
+                    {submitted && (
+                      <Badge tone="success">Submitted</Badge>
+                    )}
+                  </div>
+                  {!submitted &&
+                    (isClosed(a) ? (
+                      <p className="text-sm text-slate-600">
+                        Closed – not submitted
+                      </p>
+                    ) : isOpen(a, now) ? (
+                      <p className="text-sm text-slate-600">
+                        Due <LocalDateTime value={a.closes_at} />
+                      </p>
+                    ) : (
+                      <p className="text-sm text-slate-600">
+                        Opens <LocalDateTime value={a.opens_at} />
+                      </p>
+                    ))}
                 </div>
-                <p className="text-sm text-slate-600">
-                  {a.kind === "assignment" ? "Due " : "Closes "}
-                  <LocalDateTime value={a.closes_at} />
-                </p>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

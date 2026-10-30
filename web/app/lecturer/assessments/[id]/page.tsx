@@ -62,6 +62,15 @@ export default async function AssessmentDetailPage({
     .eq("assessment_id", id)
     .order("created_at");
   const noteList = (notes ?? []) as CourseNote[];
+  const { count: enrolledCount } = await supabase
+    .from("enrollments")
+    .select("student_id", { count: "exact", head: true })
+    .eq("assessment_id", id);
+  const { count: submittedCount } = await supabase
+    .from("submissions")
+    .select("id", { count: "exact", head: true })
+    .eq("assessment_id", id)
+    .eq("status", "submitted");
 
   return (
     <div className="space-y-6">
@@ -114,6 +123,12 @@ export default async function AssessmentDetailPage({
       <CourseNotesUpload assessmentId={id} notes={noteList} />
       <Card title="Marking setup">
         <dl className="divide-y divide-slate-200">
+          <div className="flex items-center justify-between gap-4 py-2">
+            <dt className="text-sm font-medium text-slate-900">Submissions</dt>
+            <dd className="text-sm text-slate-600">
+              {submittedCount ?? 0} submitted of {enrolledCount ?? 0} enrolled
+            </dd>
+          </div>
           <div className="flex items-center justify-between gap-4 py-2">
             <dt className="text-sm font-medium text-slate-900">Course notes</dt>
             <dd className="text-sm text-slate-600">

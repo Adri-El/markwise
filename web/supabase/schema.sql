@@ -467,8 +467,11 @@ revoke execute on function create_assessment(jsonb) from public, anon;
 grant execute on function create_assessment(jsonb) to authenticated;
 
 ---------- storage (private answer PDFs) ----------
-insert into storage.buckets (id, name, public)
-values ('answer-pdfs', 'answer-pdfs', false) on conflict (id) do nothing;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('answer-pdfs', 'answer-pdfs', false, 10485760, '{application/pdf}')
+on conflict (id) do update set
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 -- path convention: <assessment_id>/<student_id>/<question_id>.pdf
 drop policy if exists pdf_upload_own on storage.objects;
 create policy pdf_upload_own on storage.objects for insert to authenticated
