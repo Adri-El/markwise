@@ -86,8 +86,6 @@ export async function createAssessment(
         ok: false,
         error: `Question ${n}: max marks must be a positive multiple of 0.5.`,
       };
-    if (!q.scheme.trim())
-      return { ok: false, error: `Question ${n}: marking scheme is required.` };
     if (q.subparts.length > 0) {
       const ids = q.subparts.map((s) => s.id);
       if (ids.some((id) => !/^[a-z]$/.test(id)))

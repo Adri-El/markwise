@@ -41,3 +41,14 @@ export interface MarkingScheme {
   question_id: string;
   scheme: string;
 }
+
+export interface CourseNote {
+  id: string;
+  assessment_id: string;
+  storage_path: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_by: string;
+  created_at: string;
+}

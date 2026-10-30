@@ -109,6 +109,17 @@ create table if not exists results (
   marked_at timestamptz not null default now()
 );
 
+create table if not exists course_notes (   -- lecturer-only uploads
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references assessments (id) on delete cascade,
+  storage_path text not null unique,
+  filename text not null,
+  mime_type text not null,
+  size_bytes int not null check (size_bytes > 0 and size_bytes <= 20971520),
+  uploaded_by uuid not null default auth.uid() references profiles,
+  created_at timestamptz not null default now()
+);
+
 ---------- v2: answer mode per assessment + schedule guard ----------
 alter table assessments
   add column if not exists answer_mode text not null default 'typed'
@@ -170,6 +181,7 @@ alter table submissions enable row level security;
 alter table answers enable row level security;
 alter table marking_jobs enable row level security;
 alter table results enable row level security;
+alter table course_notes enable row level security;
 
 -- profiles: own row; lecturers see enrolled students; role immutable
 drop policy if exists profiles_select on profiles;
@@ -217,6 +229,17 @@ create policy rubrics_lecturer on rubrics for all to authenticated
     where a.id = rubrics.assessment_id and a.lecturer_id = (select auth.uid())))
   with check (exists (select 1 from assessments a
     where a.id = rubrics.assessment_id and a.lecturer_id = (select auth.uid())));
+
+-- course_notes: owning lecturer only; students get no access
+drop policy if exists course_notes_select on course_notes;
+create policy course_notes_select on course_notes for select to authenticated
+  using (is_assessment_lecturer(course_notes.assessment_id));
+drop policy if exists course_notes_insert on course_notes;
+create policy course_notes_insert on course_notes for insert to authenticated
+  with check (is_assessment_lecturer(course_notes.assessment_id));
+drop policy if exists course_notes_delete on course_notes;
+create policy course_notes_delete on course_notes for delete to authenticated
+  using (is_assessment_lecturer(course_notes.assessment_id));
 
 -- enrollments: read own/lecturer's; leave/remove; inserts via join RPC only
 drop policy if exists enrollments_read on enrollments;
@@ -324,6 +347,8 @@ grant select, insert on submissions to authenticated;
 grant select, insert, update, delete on answers to authenticated;
 grant select, insert, update on marking_jobs to authenticated;
 grant select, update on results to authenticated;
+revoke all on course_notes from anon, authenticated;
+grant select, insert, delete on course_notes to authenticated;
 
 ---------- profile trigger ----------
 create or replace function handle_new_user() returns trigger
@@ -426,8 +451,10 @@ begin
     values (v_id, 'q' || v_idx, v_idx, v_q->>'prompt',
       (v_q->>'max_marks')::numeric, coalesce(v_q->'subparts', '[]'))
     returning id into v_qid;
-    insert into marking_schemes (question_id, scheme)
-    values (v_qid, v_q->>'scheme');
+    if nullif(btrim(v_q->>'scheme'), '') is not null then
+      insert into marking_schemes (question_id, scheme)
+      values (v_qid, btrim(v_q->>'scheme'));
+    end if;
   end loop;
 
   insert into rubrics (assessment_id, points, reference_note)
@@ -495,3 +522,27 @@ create policy pdf_delete_own on storage.objects for delete to authenticated
         and s.status = 'draft'
         and (a.opens_at is null or now() >= a.opens_at)
         and (a.closes_at is null or now() <= a.closes_at)));
+
+---------- storage (private course notes) ----------
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('course-notes', 'course-notes', false, 20971520)
+on conflict (id) do update set file_size_limit = excluded.file_size_limit;
+-- path convention: <assessment_id>/<uuid>-<sanitised filename>
+drop policy if exists notes_upload_lecturer on storage.objects;
+create policy notes_upload_lecturer on storage.objects for insert to authenticated
+  with check (bucket_id = 'course-notes' and exists (
+    select 1 from assessments a
+    where a.id::text = (storage.foldername(name))[1]
+    and is_assessment_lecturer(a.id)));
+drop policy if exists notes_read_lecturer on storage.objects;
+create policy notes_read_lecturer on storage.objects for select to authenticated
+  using (bucket_id = 'course-notes' and exists (
+    select 1 from assessments a
+    where a.id::text = (storage.foldername(name))[1]
+    and is_assessment_lecturer(a.id)));
+drop policy if exists notes_delete_lecturer on storage.objects;
+create policy notes_delete_lecturer on storage.objects for delete to authenticated
+  using (bucket_id = 'course-notes' and exists (
+    select 1 from assessments a
+    where a.id::text = (storage.foldername(name))[1]
+    and is_assessment_lecturer(a.id)));

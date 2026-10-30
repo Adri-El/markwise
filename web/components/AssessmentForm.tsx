@@ -7,6 +7,13 @@ import {
   type QuestionInput,
 } from "@/lib/actions/assessments";
 import type { AnswerMode, AssessmentKind } from "@/lib/types";
+import {
+  MAX_NOTES_PER_ASSESSMENT,
+  NOTE_ACCEPT,
+  formatNoteSize,
+  uploadNote,
+  validateNoteFile,
+} from "@/lib/notes-upload";
 import Button from "./ui/Button";
 import Card from "./ui/Card";
 import FieldError from "./ui/FieldError";
@@ -108,6 +115,9 @@ export default function AssessmentForm() {
   const [answerMode, setAnswerMode] = useState<AnswerMode>("typed");
   const [referenceNote, setReferenceNote] = useState("");
   const [questions, setQuestions] = useState<FormQuestion[]>([blankQuestion()]);
+  const [noteFiles, setNoteFiles] = useState<File[]>([]);
+  const [notesError, setNotesError] = useState("");
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -143,8 +153,6 @@ export default function AssessmentForm() {
       const maxMarks = Number(q.maxMarks);
       if (q.maxMarks.trim() === "" || !validMarks(maxMarks))
         return `Question ${n}: max marks must be a positive multiple of 0.5.`;
-      if (!q.scheme.trim())
-        return `Question ${n}: marking scheme is required.`;
       const subparts: QuestionInput["subparts"] = [];
       for (const s of q.subparts) {
         if (!/^[a-z]$/.test(s.id))
@@ -185,8 +193,9 @@ export default function AssessmentForm() {
       return;
     }
     setPending(true);
+    let result;
     try {
-      const result = await createAssessment({
+      result = await createAssessment({
         title,
         kind,
         instructions,
@@ -196,19 +205,63 @@ export default function AssessmentForm() {
         referenceNote,
         questions: parsed,
       });
-      if (!result.ok || !result.id) {
-        setError(result.error ?? "Something went wrong.");
-      } else {
-        router.push(`/lecturer/assessments/${result.id}`);
-      }
-    } finally {
+    } catch {
+      setError("Something went wrong.");
       setPending(false);
+      return;
     }
+    if (!result.ok || !result.id) {
+      setError(result.error ?? "Something went wrong.");
+      setPending(false);
+      return;
+    }
+    // From here on pending stays true until navigation: no second submit.
+    if (noteFiles.length === 0) {
+      router.push(`/lecturer/assessments/${result.id}`);
+      return;
+    }
+    let failed = 0;
+    for (const [i, file] of noteFiles.entries()) {
+      setUploadProgress(`Uploading notes ${i + 1} of ${noteFiles.length}…`);
+      try {
+        const uploaded = await uploadNote(result.id, file);
+        if (!uploaded.ok) failed += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    setUploadProgress(null);
+    router.push(
+      failed > 0
+        ? `/lecturer/assessments/${result.id}?notes_failed=${failed}`
+        : `/lecturer/assessments/${result.id}`,
+    );
   }
 
   function onKindChange(next: AssessmentKind) {
     setKind(next);
     if (next === "assignment") setOpensAt("");
+  }
+
+  // Picking files only stages them; nothing uploads until Create succeeds.
+  function onNotesChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    setNotesError("");
+    const kept: File[] = [...noteFiles];
+    for (const file of picked) {
+      const problem = validateNoteFile(file);
+      if (problem) {
+        setNotesError(`${file.name}: ${problem}`);
+        break;
+      }
+      if (kept.length >= MAX_NOTES_PER_ASSESSMENT) {
+        setNotesError("Maximum 10 files per assessment.");
+        break;
+      }
+      kept.push(file);
+    }
+    setNoteFiles(kept);
   }
 
   return (
@@ -344,7 +397,7 @@ export default function AssessmentForm() {
               </div>
               <div>
                 <Label htmlFor={`q-${i}-scheme`}>
-                  Marking scheme (lecturers only)
+                  Marking scheme (optional, lecturers only)
                 </Label>
                 <Textarea
                   id={`q-${i}-scheme`}
@@ -352,6 +405,10 @@ export default function AssessmentForm() {
                   onChange={(e) => updateQuestion(i, { scheme: e.target.value })}
                   rows={3}
                 />
+                <p className="mt-1 text-sm text-slate-600">
+                  Leave blank to draft this question&apos;s rubric from your
+                  course notes. If given, it sets the points and mark split.
+                </p>
               </div>
               <div>
                 <span className="mb-1 block text-sm font-medium text-slate-700">
@@ -467,6 +524,52 @@ export default function AssessmentForm() {
       </div>
 
       <Card
+        title="Course notes (optional)"
+        subtitle="Optional. Read once to draft the marking rubric. You can also add notes later on the assessment page."
+      >
+        <div className="space-y-3">
+          {noteFiles.length > 0 && (
+            <ul className="divide-y divide-slate-200 rounded-md border border-slate-200">
+              {noteFiles.map((file, i) => (
+                <li
+                  key={`${file.name}-${file.size}-${i}`}
+                  className="flex items-center justify-between gap-3 px-3 py-2"
+                >
+                  <p className="truncate text-sm text-slate-900">
+                    {file.name}{" "}
+                    <span className="text-slate-600">
+                      · {formatNoteSize(file.size)}
+                    </span>
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() =>
+                      setNoteFiles((files) => files.filter((_, j) => j !== i))
+                    }
+                  >
+                    Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div>
+            <Label htmlFor="assessment-notes">Add files</Label>
+            <input
+              id="assessment-notes"
+              type="file"
+              accept={NOTE_ACCEPT}
+              multiple
+              onChange={onNotesChange}
+              className="block w-full text-sm text-slate-700 file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-slate-300 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-slate-900 hover:file:bg-slate-50 disabled:opacity-50"
+            />
+          </div>
+          <FieldError message={notesError} />
+        </div>
+      </Card>
+
+      <Card
         title="Lecturer-only notes"
         subtitle="Guidance for the AI marker. Students never see this."
       >
@@ -487,8 +590,12 @@ export default function AssessmentForm() {
           <p className="text-sm font-medium text-slate-900">
             Total: {totalMarks === null ? "—" : `${totalMarks} marks`}
           </p>
-          <Button type="submit" loading={pending}>
-            Create assessment
+          <Button
+            type="submit"
+            loading={pending && uploadProgress === null}
+            disabled={pending}
+          >
+            {uploadProgress ?? "Create assessment"}
           </Button>
         </div>
         {error && (
