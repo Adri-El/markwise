@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireRole } from "../auth";
 import { createClient } from "../supabase/server";
-import type { AnswerMode, AssessmentKind } from "../types";
+import { isPast, isValidDate } from "../schedule";
+import type { AnswerMode, Assessment, AssessmentKind } from "../types";
 
 export interface QuestionInput {
   prompt: string;
@@ -29,22 +30,12 @@ export interface CreateResult {
   error?: string;
 }
 
-const PAST_GRACE_MS = 60_000;
-
 function validMarks(value: number): boolean {
   return (
     Number.isFinite(value) &&
     value > 0 &&
     Math.abs(value * 2 - Math.round(value * 2)) < 1e-9
   );
-}
-
-function validDate(value: string | null): value is string {
-  return !!value && !Number.isNaN(new Date(value).getTime());
-}
-
-function inPast(value: string): boolean {
-  return new Date(value).getTime() < Date.now() - PAST_GRACE_MS;
 }
 
 export async function createAssessment(
@@ -60,17 +51,17 @@ export async function createAssessment(
   let opensAt: string | null = null;
   let closesAt: string | null = null;
   if (input.kind === "assignment") {
-    if (!validDate(input.closesAt))
+    if (!isValidDate(input.closesAt))
       return { ok: false, error: "A due date and time is required." };
     closesAt = input.closesAt;
-    if (inPast(closesAt)) return { ok: false, error: "Due must not be in the past." };
+    if (isPast(closesAt)) return { ok: false, error: "Due must not be in the past." };
   } else {
-    if (!validDate(input.opensAt) || !validDate(input.closesAt))
+    if (!isValidDate(input.opensAt) || !isValidDate(input.closesAt))
       return { ok: false, error: "Opens and Closes are both required." };
     opensAt = input.opensAt;
     closesAt = input.closesAt;
-    if (inPast(opensAt)) return { ok: false, error: "Opens must not be in the past." };
-    if (inPast(closesAt)) return { ok: false, error: "Closes must not be in the past." };
+    if (isPast(opensAt)) return { ok: false, error: "Opens must not be in the past." };
+    if (isPast(closesAt)) return { ok: false, error: "Closes must not be in the past." };
     if (new Date(closesAt).getTime() <= new Date(opensAt).getTime())
       return { ok: false, error: "Closes must be after Opens." };
   }
@@ -137,4 +128,92 @@ export async function createAssessment(
   }
   revalidatePath("/lecturer");
   return { ok: true, id: data as string };
+}
+
+export interface UpdateScheduleInput {
+  assessmentId: string;
+  opensAt: string | null;
+  closesAt: string | null;
+}
+
+export interface UpdateResult {
+  ok: boolean;
+  error?: string;
+}
+
+export async function updateSchedule(
+  input: UpdateScheduleInput,
+): Promise<UpdateResult> {
+  await requireRole("lecturer");
+  const supabase = await createClient();
+  const { data: row } = await supabase
+    .from("assessments")
+    .select("id, kind, opens_at, closes_at")
+    .eq("id", input.assessmentId)
+    .single();
+  if (!row) return { ok: false, error: "Assessment not found." };
+  const current = row as Pick<
+    Assessment,
+    "id" | "kind" | "opens_at" | "closes_at"
+  >;
+
+  let opensAt: string | null;
+  let closesAt: string;
+  if (current.kind === "assignment") {
+    if (input.opensAt !== null)
+      return { ok: false, error: "Assignments have a due time only." };
+    if (!isValidDate(input.closesAt))
+      return { ok: false, error: "A due date and time is required." };
+    if (isPast(input.closesAt))
+      return { ok: false, error: "Due must not be in the past." };
+    opensAt = null;
+    closesAt = input.closesAt;
+  } else {
+    if (!isValidDate(input.opensAt) || !isValidDate(input.closesAt))
+      return { ok: false, error: "Opens and Closes are both required." };
+    if (isPast(input.closesAt))
+      return { ok: false, error: "Closes must not be in the past." };
+    if (
+      new Date(input.closesAt).getTime() <= new Date(input.opensAt).getTime()
+    )
+      return { ok: false, error: "Closes must be after Opens." };
+    if (
+      current.opens_at !== null &&
+      isPast(current.opens_at) &&
+      new Date(input.opensAt).getTime() !==
+        new Date(current.opens_at).getTime()
+    )
+      return {
+        ok: false,
+        error:
+          "This assessment has already opened; only the due time can change.",
+      };
+    opensAt = input.opensAt;
+    closesAt = input.closesAt;
+  }
+
+  const { data: jobs } = await supabase
+    .from("marking_jobs")
+    .select("id")
+    .eq("assessment_id", input.assessmentId)
+    .eq("type", "mark_all")
+    .limit(1);
+  if ((jobs ?? []).length > 0)
+    return {
+      ok: false,
+      error: "Marking has started; the schedule can't be changed.",
+    };
+
+  const { error } = await supabase
+    .from("assessments")
+    .update({ opens_at: opensAt, closes_at: closesAt })
+    .eq("id", input.assessmentId);
+  if (error) {
+    console.error("updateSchedule failed:", error.message);
+    return { ok: false, error: "Could not save the schedule." };
+  }
+  revalidatePath("/lecturer");
+  revalidatePath(`/lecturer/assessments/${input.assessmentId}`);
+  revalidatePath("/student");
+  return { ok: true };
 }

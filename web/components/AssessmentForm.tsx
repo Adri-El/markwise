@@ -14,14 +14,13 @@ import {
   uploadNote,
   validateNoteFile,
 } from "@/lib/notes-upload";
+import { isPast, localToIso } from "@/lib/schedule";
 import Button from "./ui/Button";
 import Card from "./ui/Card";
 import FieldError from "./ui/FieldError";
 import Input from "./ui/Input";
 import Label from "./ui/Label";
 import Textarea from "./ui/Textarea";
-
-const PAST_GRACE_MS = 60_000;
 
 interface FormSubpart {
   id: string;
@@ -48,14 +47,6 @@ function validMarks(value: number): boolean {
     value > 0 &&
     Math.abs(value * 2 - Math.round(value * 2)) < 1e-9
   );
-}
-
-function inPast(value: string): boolean {
-  return new Date(value).getTime() < Date.now() - PAST_GRACE_MS;
-}
-
-function toIso(local: string): string {
-  return new Date(local).toISOString();
 }
 
 function Segmented<T extends string>({
@@ -134,15 +125,15 @@ export default function AssessmentForm() {
   function validateSchedule(): { opens: string | null; closes: string | null } | string {
     if (kind === "assignment") {
       if (!closesAt) return "A due date and time is required.";
-      if (inPast(closesAt)) return "Due must not be in the past.";
-      return { opens: null, closes: toIso(closesAt) };
+      if (isPast(closesAt)) return "Due must not be in the past.";
+      return { opens: null, closes: localToIso(closesAt) };
     }
     if (!opensAt || !closesAt) return "Opens and Closes are both required.";
-    if (inPast(opensAt)) return "Opens must not be in the past.";
-    if (inPast(closesAt)) return "Closes must not be in the past.";
+    if (isPast(opensAt)) return "Opens must not be in the past.";
+    if (isPast(closesAt)) return "Closes must not be in the past.";
     if (new Date(closesAt).getTime() <= new Date(opensAt).getTime())
       return "Closes must be after Opens.";
-    return { opens: toIso(opensAt), closes: toIso(closesAt) };
+    return { opens: localToIso(opensAt), closes: localToIso(closesAt) };
   }
 
   function validateQuestions(): QuestionInput[] | string {

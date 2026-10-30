@@ -14,6 +14,7 @@ import Card from "@/components/ui/Card";
 import CopyButton from "@/components/CopyButton";
 import CourseNotesUpload from "@/components/CourseNotesUpload";
 import LocalDateTime from "@/components/LocalDateTime";
+import ScheduleEditor from "@/components/ScheduleEditor";
 import StatusBadge from "@/components/StatusBadge";
 
 function capitalize(word: string): string {
@@ -92,6 +93,12 @@ export default async function AssessmentDetailPage({
             Opens <LocalDateTime value={a.opens_at} /> · closes{" "}
             <LocalDateTime value={a.closes_at} />
           </p>
+          <ScheduleEditor
+            assessmentId={id}
+            kind={a.kind}
+            opensAt={a.opens_at}
+            closesAt={a.closes_at}
+          />
           {a.instructions && (
             <p className="whitespace-pre-wrap text-sm text-slate-700">
               {a.instructions}
