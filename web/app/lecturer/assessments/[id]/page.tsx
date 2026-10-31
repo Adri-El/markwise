@@ -1,19 +1,23 @@
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { DRAFT_BLOCK_REASON } from "@/lib/types";
 import type {
   Assessment,
   CourseNote,
+  MarkingJob,
   MarkingScheme,
   Question,
+  RubricPoint,
 } from "@/lib/types";
 import Alert from "@/components/ui/Alert";
 import Badge from "@/components/ui/Badge";
-import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import CopyButton from "@/components/CopyButton";
 import CourseNotesUpload from "@/components/CourseNotesUpload";
 import LocalDateTime from "@/components/LocalDateTime";
+import RubricPreview from "@/components/RubricPreview";
+import RubricStatus from "@/components/RubricStatus";
 import ScheduleEditor from "@/components/ScheduleEditor";
 import StatusBadge from "@/components/StatusBadge";
 
@@ -62,6 +66,31 @@ export default async function AssessmentDetailPage({
     .eq("assessment_id", id)
     .order("created_at");
   const noteList = (notes ?? []) as CourseNote[];
+  const questionList = ((questions ?? []) as Question[]);
+  const { data: rubricRows } = await supabase
+    .from("rubrics")
+    .select("points, approved")
+    .eq("assessment_id", id)
+    .limit(1);
+  const rubricRow = (rubricRows ?? [])[0] as
+    | { points: unknown; approved: boolean }
+    | undefined;
+  const rubricPoints = Array.isArray(rubricRow?.points)
+    ? (rubricRow.points as RubricPoint[])
+    : [];
+  const rubricApproved = rubricRow?.approved ?? false;
+  const { data: jobRows } = await supabase
+    .from("marking_jobs")
+    .select("*")
+    .eq("assessment_id", id)
+    .eq("type", "build_rubric")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const latestJob = ((jobRows ?? [])[0] as MarkingJob | undefined) ?? null;
+  const canDraft =
+    noteList.length > 0 ||
+    (questionList.length > 0 &&
+      questionList.every((q) => schemeByQuestion.has(q.id)));
   const { count: enrolledCount } = await supabase
     .from("enrollments")
     .select("student_id", { count: "exact", head: true })
@@ -135,12 +164,19 @@ export default async function AssessmentDetailPage({
               {noteList.length} {noteList.length === 1 ? "file" : "files"}
             </dd>
           </div>
-          <div className="flex items-center justify-between gap-4 py-2">
-            <dt className="text-sm font-medium text-slate-900">Rubric</dt>
-            <dd className="flex items-center gap-3 text-sm text-slate-600">
-              Not drafted
-              <Button disabled>Draft rubric</Button>
-              <span className="text-xs">Coming next</span>
+          <div className="flex items-start justify-between gap-4 py-2">
+            <dt className="shrink-0 pt-0.5 text-sm font-medium text-slate-900">
+              Rubric
+            </dt>
+            <dd className="min-w-0 flex-1">
+              <RubricStatus
+                assessmentId={id}
+                initialJob={latestJob}
+                pointsCount={rubricPoints.length}
+                approved={rubricApproved}
+                canDraft={canDraft}
+                draftBlockReason={canDraft ? null : DRAFT_BLOCK_REASON}
+              />
             </dd>
           </div>
           <div className="flex items-center justify-between gap-4 py-2">
@@ -151,6 +187,9 @@ export default async function AssessmentDetailPage({
           </div>
         </dl>
       </Card>
+      {rubricPoints.length > 0 && (
+        <RubricPreview questions={questionList} points={rubricPoints} />
+      )}
       <div className="space-y-4">
         <h2 className="text-base font-semibold text-slate-900">Questions</h2>
         {((questions ?? []) as Question[]).map((q) => (

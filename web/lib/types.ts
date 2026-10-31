@@ -4,6 +4,9 @@ export type AnswerMode = "typed" | "pdf";
 
 export const MAX_ANSWER_CHARS = 20_000;
 
+export const DRAFT_BLOCK_REASON =
+  "Upload course notes or add a marking scheme to every question first.";
+
 export interface Profile {
   id: string;
   role: Role;
@@ -73,4 +76,40 @@ export interface Answer {
   text: string;
   pdf_path: string | null;
   updated_at: string;
+}
+
+export interface MarkingJobProgress {
+  stage?: "reading_notes" | "drafting" | "saving";
+  points?: number;
+  notes_pages?: number;
+  unreadable_pages?: { file: string; page: number }[];
+  warnings?: string[];
+  usage?: { input_tokens?: number; output_tokens?: number };
+}
+
+export interface MarkingJob {
+  id: string;
+  assessment_id: string;
+  type: "build_rubric" | "mark_all";
+  status: "queued" | "working" | "done" | "error";
+  progress: MarkingJobProgress;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RubricPoint {
+  id: string;
+  question_id: string;
+  subpart?: string;
+  description: string;
+  max_marks: number;
+  source_quote?: string;
+  source_file?: string;
+  source_page?: number;
+  source_section?: string;
+  accept?: string[];
+  reject?: string[];
+  needs_lecturer?: boolean;
+  reason?: string;
 }
