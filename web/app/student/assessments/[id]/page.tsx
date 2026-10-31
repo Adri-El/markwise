@@ -139,6 +139,13 @@ export default async function StudentAssessmentPage({
     answerList = (answers ?? []) as Answer[];
   }
   const answersByQuestion = new Map(answerList.map((x) => [x.question_id, x]));
+  const { data: lecturerName } = await supabase.rpc("lecturer_name", {
+    p_assessment_id: id,
+  });
+  const setBy =
+    typeof lecturerName === "string" && lecturerName.trim() !== ""
+      ? lecturerName
+      : null;
 
   const isPdf = a.answer_mode === "pdf";
   const scriptAttached = !!submission?.script_path;
@@ -171,6 +178,9 @@ export default async function StudentAssessmentPage({
       <Card>
         <div className="space-y-2">
           <h1 className="text-xl font-semibold text-slate-900">{a.title}</h1>
+          {setBy && (
+            <p className="text-sm text-slate-600">Set by {setBy}</p>
+          )}
           <div className="flex flex-wrap gap-2">
             <Badge tone="info">{capitalize(a.kind)}</Badge>
             {submitted && <Badge tone="success">Submitted</Badge>}

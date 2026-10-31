@@ -45,6 +45,17 @@ export default async function StudentDashboard() {
       (s) => [s.assessment_id, s.status],
     ),
   );
+  const lecturerNames = await Promise.all(
+    assessments.map(async (a) => {
+      const { data } = await supabase.rpc("lecturer_name", {
+        p_assessment_id: a.id,
+      });
+      const name =
+        typeof data === "string" && data.trim() !== "" ? data : null;
+      return [a.id, name] as const;
+    }),
+  );
+  const lecturerByAssessment = new Map(lecturerNames);
   const now = Date.now();
 
   return (
@@ -71,6 +82,11 @@ export default async function StudentDashboard() {
                   >
                     {a.title}
                   </a>
+                  {lecturerByAssessment.get(a.id) && (
+                    <p className="text-sm text-slate-600">
+                      Set by {lecturerByAssessment.get(a.id)}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <Badge tone="info">{capitalize(a.kind)}</Badge>
                     {submitted && (

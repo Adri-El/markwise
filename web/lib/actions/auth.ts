@@ -36,12 +36,12 @@ export async function signUp(input: {
     return { ok: false, error: "Password must be at least 6 characters." };
   if (input.role !== "student" && input.role !== "lecturer")
     return { ok: false, error: "Choose Student or Lecturer." };
-  if (input.role === "student") {
-    if (!input.fullName.trim())
-      return { ok: false, error: "Full name is required." };
-    if (!input.matric.trim())
-      return { ok: false, error: "Matric number is required." };
-  }
+  if (!input.fullName.trim())
+    return { ok: false, error: "Full name is required." };
+  if (input.fullName.trim().length > 100)
+    return { ok: false, error: "Full name must be under 100 characters." };
+  if (input.role === "student" && !input.matric.trim())
+    return { ok: false, error: "Matric number is required." };
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email,

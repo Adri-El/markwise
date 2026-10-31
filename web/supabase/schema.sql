@@ -609,3 +609,16 @@ grant execute on function claim_marking_job(text) to service_role;
 alter table results add column if not exists segments jsonb not null default '{}';
 alter table results add column if not exists total_marks numeric;
 alter table results add column if not exists max_marks numeric;
+
+---------- v5: lecturer name for enrolled students ----------
+create or replace function lecturer_name(p_assessment_id uuid)
+returns text
+language sql stable security definer set search_path = public as
+$$ select p.full_name from profiles p
+   join assessments a on a.lecturer_id = p.id
+   where a.id = p_assessment_id
+     and (is_enrolled(p_assessment_id)
+          or is_assessment_lecturer(p_assessment_id)) $$;
+
+revoke execute on function lecturer_name(uuid) from public, anon;
+grant execute on function lecturer_name(uuid) to authenticated;

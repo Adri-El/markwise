@@ -46,12 +46,12 @@ export default function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       setError("Choose Student or Lecturer.");
       return;
     }
-    if (mode === "sign-up" && role === "student") {
+    if (mode === "sign-up" && role !== "") {
       if (!fullName) {
         setError("Full name is required.");
         return;
       }
-      if (!matric) {
+      if (role === "student" && !matric) {
         setError("Matric number is required.");
         return;
       }
@@ -102,22 +102,25 @@ export default function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
           ))}
         </div>
       )}
+      {mode === "sign-up" && role !== "" && (
+        <div>
+          <Label htmlFor="auth-fullname">Full name</Label>
+          <Input
+            id="auth-fullname"
+            name="fullName"
+            placeholder={
+              role === "lecturer" ? "e.g. Dr Ada Okafor" : "Full name"
+            }
+            autoComplete="name"
+            maxLength={100}
+          />
+        </div>
+      )}
       {mode === "sign-up" && role === "student" && (
-        <>
-          <div>
-            <Label htmlFor="auth-fullname">Full name</Label>
-            <Input
-              id="auth-fullname"
-              name="fullName"
-              placeholder="Full name"
-              autoComplete="name"
-            />
-          </div>
-          <div>
-            <Label htmlFor="auth-matric">Matric number</Label>
-            <Input id="auth-matric" name="matric" placeholder="Matric number" />
-          </div>
-        </>
+        <div>
+          <Label htmlFor="auth-matric">Matric number</Label>
+          <Input id="auth-matric" name="matric" placeholder="Matric number" />
+        </div>
       )}
       <div>
         <Label htmlFor="auth-email">Email</Label>
