@@ -23,14 +23,17 @@ from .rubric_build import draft_rubric
 from .segment import locate_answers
 from .supabase_client import SupabaseClient
 from .tools import check_rubric, extract_pdf_pages
+from .vision import pages_needing_vision, transcribe_script
 
 NOTES_BUCKET = "course-notes"
 SCRIPTS_BUCKET = "answer-pdfs"
 PROGRESS_INTERVAL = 2.0
 STALE_MINUTES = 15
 STOPPED_MESSAGE = "Worker stopped before finishing. Queue the job again."
-ILLEGIBLE_NOTE = ("No readable text in the script (scanned or handwritten). "
-                  "Needs manual marking.")
+ILLEGIBLE_NOTE = ("Couldn't read the script, even with handwriting "
+                  "recognition. Needs manual marking.")
+VISION_FLAG_NOTE = ("Handwritten answer transcribed by AI; check the "
+                    "transcription against the script.")
 
 
 def _now_iso():
@@ -335,20 +338,51 @@ def _not_found_segments(codes):
 
 def _empty_usage():
     return {"input_tokens": 0, "output_tokens": 0,
-            "segmentation": {"input_tokens": 0, "output_tokens": 0}}
+            "segmentation": {"input_tokens": 0, "output_tokens": 0},
+            "vision": {"input_tokens": 0, "output_tokens": 0}}
+
+
+def _combined_usage(marking_usage, seg_usage, vision_usage):
+    return {
+        "input_tokens": marking_usage.get("input_tokens", 0)
+        + seg_usage.get("input_tokens", 0)
+        + vision_usage.get("input_tokens", 0),
+        "output_tokens": marking_usage.get("output_tokens", 0)
+        + seg_usage.get("output_tokens", 0)
+        + vision_usage.get("output_tokens", 0),
+        "segmentation": {"input_tokens": seg_usage.get("input_tokens", 0),
+                         "output_tokens": seg_usage.get("output_tokens", 0)},
+        "vision": {"input_tokens": vision_usage.get("input_tokens", 0),
+                   "output_tokens": vision_usage.get("output_tokens", 0)},
+    }
 
 
 def _upsert_result(client, submission_id, max_marks, status, scores, awards,
-                   flags, usage, segments, total_marks):
+                   flags, usage, segments, total_marks, transcript=None):
     """Write one results row. Never touches overrides (merge keeps it)."""
     client.upsert(
         "results",
         {"submission_id": submission_id, "status": status,
          "scores": scores, "awards": awards, "flags": flags,
          "usage": usage, "segments": segments,
+         "transcript": transcript if transcript is not None else [],
          "total_marks": total_marks, "max_marks": max_marks,
          "marked_at": _now_iso(), "approved": False, "published": False},
         on_conflict="submission_id")
+
+
+def _vision_flags(segments, codes, transcript):
+    """Flag answers transcribed from vision pages with [illegible] words."""
+    vision_pages = {entry["page"] for entry in transcript
+                    if entry.get("source") == "vision"}
+    flags = []
+    for code in codes:
+        segment = segments.get(code) or {}
+        text = segment.get("text") or ""
+        if segment.get("page") in vision_pages and "[illegible]" in text:
+            flags.append({"question_id": code, "reason": "other",
+                          "note": VISION_FLAG_NOTE})
+    return flags
 
 
 def _mark_single(client, assessment, rubric, sub, answer_mode, typed,
@@ -362,6 +396,8 @@ def _mark_single(client, assessment, rubric, sub, answer_mode, typed,
         assessment["id"], sub["id"], stamp))
     segments = {}
     seg_usage = {"input_tokens": 0, "output_tokens": 0}
+    vision_usage = {"input_tokens": 0, "output_tokens": 0}
+    transcript = []
     answers = None
     with tempfile.TemporaryDirectory() as tmp:
         if answer_mode == "pdf":
@@ -371,13 +407,20 @@ def _mark_single(client, assessment, rubric, sub, answer_mode, typed,
             script.write_bytes(
                 client.download(SCRIPTS_BUCKET, sub["script_path"]))
             pages = extract_pdf_pages(script)
+            if pages_needing_vision(pages):
+                transcribed = transcribe_script(script, pages)
+                pages = transcribed["pages"]
+                transcript = transcribed["transcript"]
+                vision_usage = transcribed["usage"]
             if not any((page or "").strip() for page in pages):
                 flags = [{"question_id": code, "reason": "illegible",
                           "note": ILLEGIBLE_NOTE} for code in codes]
+                usage = _combined_usage({}, seg_usage, vision_usage)
                 _upsert_result(client, sub["id"], max_marks, "needs_review",
-                               {}, [], flags, _empty_usage(),
-                               _not_found_segments(codes), 0)
-                return ("needs_review", 0, 0)
+                               {}, [], flags, usage,
+                               _not_found_segments(codes), 0, transcript)
+                return ("needs_review", usage["input_tokens"],
+                        usage["output_tokens"])
             located = locate_answers(assessment["questions"], pages)
             seg_usage = located["usage"]
             segments = located["segments"]
@@ -389,18 +432,13 @@ def _mark_single(client, assessment, rubric, sub, answer_mode, typed,
         result = mark_submission(
             assessment, rubric, submission, tmp, run_dir)
     marking_usage = result.get("usage", {})
-    usage = {
-        "input_tokens": marking_usage.get("input_tokens", 0)
-        + seg_usage.get("input_tokens", 0),
-        "output_tokens": marking_usage.get("output_tokens", 0)
-        + seg_usage.get("output_tokens", 0),
-        "segmentation": {"input_tokens": seg_usage.get("input_tokens", 0),
-                         "output_tokens": seg_usage.get("output_tokens", 0)},
-    }
+    usage = _combined_usage(marking_usage, seg_usage, vision_usage)
+    flags = list(result.get("flags", []))
+    flags.extend(_vision_flags(segments, codes, transcript))
     _upsert_result(client, sub["id"], max_marks, result["status"],
                    result.get("scores", {}), result.get("awards", []),
-                   result.get("flags", []), usage, segments,
-                   result.get("total_marks", 0))
+                   flags, usage, segments,
+                   result.get("total_marks", 0), transcript)
     return (result["status"], usage["input_tokens"], usage["output_tokens"])
 
 

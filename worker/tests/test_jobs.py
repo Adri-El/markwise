@@ -504,7 +504,10 @@ class MarkAllTests(unittest.TestCase):
         self.assertEqual(row["usage"],
                          {"input_tokens": 7, "output_tokens": 8,
                           "segmentation": {"input_tokens": 0,
-                                           "output_tokens": 0}})
+                                           "output_tokens": 0},
+                          "vision": {"input_tokens": 0,
+                                     "output_tokens": 0}})
+        self.assertEqual(row["transcript"], [])
         self.assertEqual(row["total_marks"], 5)
         self.assertEqual(row["max_marks"], 6)
         self.assertIn("marked_at", row)
@@ -605,8 +608,17 @@ class MarkAllTests(unittest.TestCase):
         fake = FakeClient(
             rubric_approved=True, answer_mode="pdf", submissions=[sub],
             blobs={"aid/stu/script.pdf": b"%PDF-1.4 fake"})
+        transcript = [
+            {"page": 1, "source": "failed", "text": "", "note": "boom"},
+            {"page": 2, "source": "failed", "text": "", "note": "boom"},
+        ]
         with patch("worker.jobs.extract_pdf_pages",
                    return_value=["", "   "]), \
+                patch("worker.jobs.transcribe_script",
+                      return_value={"pages": ["", ""],
+                                    "transcript": transcript,
+                                    "usage": {"input_tokens": 5,
+                                              "output_tokens": 6}}), \
                 patch("worker.jobs.locate_answers") as locate, \
                 patch("worker.jobs.mark_submission") as mark:
             jobs.process_job(fake, mark_job())
@@ -626,7 +638,13 @@ class MarkAllTests(unittest.TestCase):
         ])
         for code in ("q1", "q2"):
             self.assertFalse(row["segments"][code]["found"])
-        self.assertEqual(row["usage"], jobs._empty_usage())
+        self.assertEqual(row["transcript"], transcript)
+        self.assertEqual(row["usage"],
+                         {"input_tokens": 5, "output_tokens": 6,
+                          "segmentation": {"input_tokens": 0,
+                                           "output_tokens": 0},
+                          "vision": {"input_tokens": 5,
+                                     "output_tokens": 6}})
 
     def test_pdf_segments_marked(self):
         sub = dict(SUBMITTED_1, script_path="aid/stu/script.pdf")
@@ -647,23 +665,96 @@ class MarkAllTests(unittest.TestCase):
             return mark_result()
 
         with patch("worker.jobs.extract_pdf_pages",
-                   return_value=["Q1 alpha beta gamma.", "more"]), \
+                   return_value=["Q1 alpha beta gamma delta epsilon.",
+                                 "More typed text here for sure."]), \
+                patch("worker.jobs.transcribe_script") as vision, \
                 patch("worker.jobs.locate_answers",
                       return_value={"segments": segments,
                                     "usage": {"input_tokens": 3,
                                               "output_tokens": 4}}), \
                 patch("worker.jobs.mark_submission", side_effect=fake_mark):
             jobs.process_job(fake, mark_job())
+            vision.assert_not_called()
         self.assertEqual(seen["submission"]["answers"],
                          [{"question_id": "q1",
                            "text": "Q1 alpha beta gamma."},
                           {"question_id": "q2", "text": ""}])
         row, _ = result_upserts(fake)[0]
         self.assertEqual(row["segments"], segments)
+        self.assertEqual(row["transcript"], [])
         self.assertEqual(row["usage"],
                          {"input_tokens": 10, "output_tokens": 12,
                           "segmentation": {"input_tokens": 3,
-                                           "output_tokens": 4}})
+                                           "output_tokens": 4},
+                          "vision": {"input_tokens": 0,
+                                     "output_tokens": 0}})
+
+    def test_pdf_vision_pages_located_and_saved(self):
+        sub = dict(SUBMITTED_1, script_path="aid/stu/script.pdf")
+        fake = FakeClient(
+            rubric_approved=True, answer_mode="pdf", submissions=[sub],
+            blobs={"aid/stu/script.pdf": b"%PDF-1.4 fake"})
+        vision_pages = ["Q1 water moves [illegible] quickly across.",
+                        "Q2 enzymes are brilliant catalysts indeed."]
+        transcript = [
+            {"page": 1, "source": "vision", "text": vision_pages[0]},
+            {"page": 2, "source": "vision", "text": vision_pages[1]},
+        ]
+        segments = {
+            "q1": {"found": True, "start_quote": "Q1 water", "page": 1,
+                   "text": vision_pages[0]},
+            "q2": {"found": True, "start_quote": "Q2 enzymes", "page": 2,
+                   "text": vision_pages[1]},
+        }
+        seen = {}
+
+        def fake_locate(questions, pages):
+            seen["pages"] = pages
+            return {"segments": segments,
+                    "usage": {"input_tokens": 3, "output_tokens": 4}}
+
+        with patch("worker.jobs.extract_pdf_pages",
+                   return_value=["", "   "]), \
+                patch("worker.jobs.transcribe_script",
+                      return_value={"pages": vision_pages,
+                                    "transcript": transcript,
+                                    "usage": {"input_tokens": 9,
+                                              "output_tokens": 10}}), \
+                patch("worker.jobs.locate_answers",
+                      side_effect=fake_locate), \
+                patch("worker.jobs.mark_submission",
+                      return_value=mark_result()):
+            jobs.process_job(fake, mark_job())
+        self.assertEqual(seen["pages"], vision_pages)
+        row, _ = result_upserts(fake)[0]
+        self.assertEqual(row["status"], "marked")
+        self.assertEqual(row["transcript"], transcript)
+        self.assertEqual(row["usage"],
+                         {"input_tokens": 19, "output_tokens": 22,
+                          "segmentation": {"input_tokens": 3,
+                                           "output_tokens": 4},
+                          "vision": {"input_tokens": 9,
+                                     "output_tokens": 10}})
+        self.assertEqual(row["flags"], [
+            {"question_id": "q1", "reason": "other",
+             "note": jobs.VISION_FLAG_NOTE},
+        ])
+
+    def test_vision_flag_rule(self):
+        segments = {
+            "q1": {"page": 1, "text": "x [illegible] y"},
+            "q2": {"page": 2, "text": "clean answer"},
+            "q3": {"page": None, "text": "[illegible]"},
+        }
+        transcript = [
+            {"page": 1, "source": "vision", "text": ""},
+            {"page": 2, "source": "text", "text": ""},
+        ]
+        self.assertEqual(
+            jobs._vision_flags(segments, ["q1", "q2", "q3"], transcript),
+            [{"question_id": "q1", "reason": "other",
+              "note": jobs.VISION_FLAG_NOTE}])
+        self.assertEqual(jobs._vision_flags(segments, ["q1"], []), [])
 
     def test_failing_submission_isolated(self):
         fake = FakeClient(

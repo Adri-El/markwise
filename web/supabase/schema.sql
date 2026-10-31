@@ -625,3 +625,6 @@ grant execute on function lecturer_name(uuid) to authenticated;
 
 ---------- v6: published result snapshot ----------
 alter table results add column if not exists final jsonb;
+
+---------- v7: handwriting transcript ----------
+alter table results add column if not exists transcript jsonb not null default '[]';
