@@ -12,37 +12,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from .agent import _client_from_env, _model_from_env, _responses_create
 from .notes import has_notes
+from .rubric_build import RUBRIC_SYSTEM, draft_rubric  # noqa: F401
 from .tools import check_rubric
-
-RUBRIC_SYSTEM = """You convert a lecturer's marking scheme into marking points.
-Output JSON only: an object {"points": [...]} where each point has
-id (p1, p2, ...), question_id, optional subpart, description, and
-max_marks (a positive multiple of 0.5). Cover every question, and make
-each question's maxima sum to at least its max_marks (above is fine for
-'any N of' schemes). No other text."""
 
 
 def load_json(path):
     return json.loads(Path(path).read_text())
-
-
-def _extract_points(text):
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = "\n".join(cleaned.splitlines()[1:])
-        if cleaned.rstrip().endswith("```"):
-            cleaned = "\n".join(cleaned.splitlines()[:-1])
-    try:
-        data = json.loads(cleaned)
-    except ValueError:
-        start = cleaned.find("{")
-        end = cleaned.rfind("}")
-        data = json.loads(cleaned[start:end + 1])
-    if isinstance(data, list):
-        return data
-    return data.get("points", [])
 
 
 def _save_rubric(assessment, points, rubric_path):
@@ -66,22 +42,13 @@ def _rubric_run_dir(runs_dir, assessment_id, stamp):
 
 def _build_rubric_from_notes(assessment_dir, assessment, rubric_path,
                              ignore_scheme):
-    from .notes import extract_notes
-    from .rubric_agent import build_rubric_with_agent
-
-    entries, unreadable = extract_notes(
-        assessment_dir / "notes", assessment_dir / "notes_text.json")
-    files = sorted({entry["file"] for entry in entries})
-    print("notes: %d page(s) from %d file(s)" % (len(entries), len(files)))
-    for page in unreadable:
-        print("warning: no extractable text (scanned?): %s p.%s"
-              % (page["file"], page["page"]))
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = _rubric_run_dir(
         Path("worker") / "runs", assessment.get("id"), stamp)
     try:
-        result = build_rubric_with_agent(
-            assessment, entries, run_dir, ignore_scheme=ignore_scheme)
+        result = draft_rubric(
+            assessment, assessment_dir / "notes", run_dir,
+            ignore_scheme=ignore_scheme)
     except Exception as exc:
         print("rubric agent failed: %s" % exc, file=sys.stderr)
         return 1
@@ -125,35 +92,15 @@ def cmd_build_rubric(args):
     if has_notes(assessment_dir / "notes"):
         return _build_rubric_from_notes(
             assessment_dir, assessment, rubric_path, args.ignore_scheme)
-    user_content = "Questions: %s\nMarking scheme: %s" % (
-        json.dumps(assessment.get("questions", [])),
-        json.dumps(assessment.get("marking_scheme", "")),
-    )
-    client = _client_from_env()
-    model = _model_from_env()
     try:
-        response = _responses_create(
-            client, model, [], RUBRIC_SYSTEM,
-            [{"role": "user", "content": user_content}],
-        )
-    except Exception as exc:
-        print("API error: %s" % exc, file=sys.stderr)
-        return 1
-    texts = []
-    for item in getattr(response, "output", []) or []:
-        content = getattr(item, "content", None)
-        if content is None and isinstance(item, dict):
-            content = item.get("content", [])
-        for part in content or []:
-            text = part.get("text", "") if isinstance(part, dict) \
-                else getattr(part, "text", "") or ""
-            if text:
-                texts.append(text)
-    try:
-        points = _extract_points("\n".join(texts))
+        result = draft_rubric(assessment, None, None)
     except ValueError:
         print("model did not return valid JSON", file=sys.stderr)
         return 1
+    except Exception as exc:
+        print("API error: %s" % exc, file=sys.stderr)
+        return 1
+    points = result["points"]
     code = _save_rubric(assessment, points, rubric_path)
     if code:
         return code

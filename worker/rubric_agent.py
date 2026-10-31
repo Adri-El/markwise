@@ -348,8 +348,13 @@ def _dispatch(state, name, arguments):
 
 
 def build_rubric_with_agent(assessment, notes_entries, run_dir,
-                            ignore_scheme=False, client=None, model=None):
-    """Draft rubric points with the tool-using agent. Returns points + usage."""
+                            ignore_scheme=False, client=None, model=None,
+                            on_progress=None):
+    """Draft rubric points with the tool-using agent. Returns points + usage.
+
+    on_progress, when given, is called after each successful add_point
+    with the running point count.
+    """
     state = RubricBuilderState(assessment, notes_entries, ignore_scheme)
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -428,6 +433,10 @@ def build_rubric_with_agent(assessment, notes_entries, run_dir,
                     "call_id": call["call_id"], "name": call["name"],
                     "result": tool_result,
                 })
+                if (call["name"] == "add_point"
+                        and tool_result.get("ok")
+                        and on_progress is not None):
+                    on_progress(len(state.points))
                 outputs.append({
                     "type": "function_call_output",
                     "call_id": call["call_id"],

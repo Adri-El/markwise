@@ -583,3 +583,24 @@ create policy notes_delete_lecturer on storage.objects for delete to authenticat
     select 1 from assessments a
     where a.id::text = (storage.foldername(name))[1]
     and is_assessment_lecturer(a.id)));
+
+---------- worker job claiming (service key only) ----------
+create or replace function claim_marking_job(p_type text)
+returns setof marking_jobs
+language sql security definer set search_path = public as
+$$
+  update marking_jobs
+  set status = 'working', updated_at = now()
+  where id = (
+    select id
+    from marking_jobs
+    where marking_jobs.type = p_type and marking_jobs.status = 'queued'
+    order by marking_jobs.created_at, marking_jobs.id
+    limit 1
+    for update skip locked
+  )
+  returning *;
+$$;
+
+revoke execute on function claim_marking_job(text) from public, anon, authenticated;
+grant execute on function claim_marking_job(text) to service_role;
