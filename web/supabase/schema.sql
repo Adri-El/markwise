@@ -604,3 +604,8 @@ $$;
 
 revoke execute on function claim_marking_job(text) from public, anon, authenticated;
 grant execute on function claim_marking_job(text) to service_role;
+
+---------- v4: marking results detail ----------
+alter table results add column if not exists segments jsonb not null default '{}';
+alter table results add column if not exists total_marks numeric;
+alter table results add column if not exists max_marks numeric;

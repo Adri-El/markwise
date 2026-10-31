@@ -2,6 +2,7 @@
 
 import io
 import json
+import threading
 import unittest
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
@@ -44,13 +45,22 @@ class FakeClient:
     """Scripted Supabase stand-in. Records updates, upserts and downloads."""
 
     def __init__(self, questions=None, schemes=None, reference_note="Be kind.",
-                 notes=(), blobs=None, assessment_missing=False):
+                 notes=(), blobs=None, assessment_missing=False,
+                 answer_mode="typed", submissions=(), answers=(),
+                 results=(), rubric_points=None, rubric_approved=False):
         self.questions = QUESTION_ROWS if questions is None else questions
         self.schemes = [SCHEME_ROW_Q1] if schemes is None else schemes
         self.reference_note = reference_note
         self.notes = list(notes)
         self.blobs = blobs or {}
         self.assessment_missing = assessment_missing
+        self.answer_mode = answer_mode
+        self.submissions = list(submissions)
+        self.answers = list(answers)
+        self.results = list(results)
+        self.rubric_points = GOOD_POINTS if rubric_points is None \
+            else rubric_points
+        self.rubric_approved = rubric_approved
         self.claims = []
         self.rpc_calls = []
         self.select_calls = []
@@ -69,16 +79,31 @@ class FakeClient:
     def select(self, table, params=None):
         self.select_calls.append((table, params or {}))
         if table == "assessments":
-            return [] if self.assessment_missing else [dict(ASSESSMENT_ROW)]
+            if self.assessment_missing:
+                return []
+            row = dict(ASSESSMENT_ROW)
+            row["answer_mode"] = self.answer_mode
+            return [row]
         if table == "questions":
             return [dict(q) for q in self.questions]
         if table == "marking_schemes":
             return [dict(s) for s in self.schemes]
         if table == "rubrics":
             return [{"assessment_id": AID,
+                     "points": [dict(p) for p in self.rubric_points],
+                     "approved": self.rubric_approved,
                      "reference_note": self.reference_note}]
         if table == "course_notes":
             return [dict(n) for n in self.notes]
+        if table == "submissions":
+            rows = [dict(s) for s in self.submissions]
+            if (params or {}).get("status") == "eq.submitted":
+                rows = [s for s in rows if s.get("status") == "submitted"]
+            return rows
+        if table == "answers":
+            return [dict(a) for a in self.answers]
+        if table == "results":
+            return [dict(r) for r in self.results]
         raise AssertionError("unexpected table %r" % table)
 
     def update(self, table, values, params):
@@ -408,6 +433,322 @@ class StaleResetTests(unittest.TestCase):
         with redirect_stdout(buf):
             self.assertEqual(jobs.run_loop(fake, once=True), 0)
         self.assertIn("reset 0", buf.getvalue())
+
+
+SUBMITTED_1 = {"id": "sub-1", "student_id": "stu-1",
+                 "status": "submitted", "script_path": None}
+SUBMITTED_2 = {"id": "sub-2", "student_id": "stu-2",
+               "status": "submitted", "script_path": None}
+DRAFT_SUB = {"id": "sub-0", "student_id": "stu-0",
+             "status": "draft", "script_path": None}
+
+
+def mark_job():
+    return {"id": "job-m", "assessment_id": AID, "type": "mark_all"}
+
+
+def mark_result(status="marked"):
+    return {
+        "status": status,
+        "scores": {"q1": {"marks": 2, "max": 2, "comment": "good"}},
+        "awards": [{"point_id": "p1", "marks": 2, "quote": "water",
+                    "reason": "stated"}],
+        "flags": [],
+        "total_marks": 5,
+        "max_marks": 6,
+        "usage": {"input_tokens": 7, "output_tokens": 8},
+    }
+
+
+def result_upserts(fake):
+    return [(row, conflict) for table, row, conflict in fake.upserts
+            if table == "results"]
+
+
+class MarkAllTests(unittest.TestCase):
+    def test_typed_answers_mapped_and_stored(self):
+        fake = FakeClient(
+            rubric_approved=True, submissions=[dict(SUBMITTED_1)],
+            answers=[
+                {"submission_id": "sub-1", "question_id": Q1,
+                 "text": "Water moves."},
+                {"submission_id": "sub-1", "question_id": Q2,
+                 "text": "Enzymes rule."},
+            ])
+        seen = {}
+
+        def fake_mark(assessment, rubric, submission, submission_dir,
+                      run_dir):
+            seen["submission"] = submission
+            seen["rubric"] = rubric
+            seen["run_dir"] = Path(run_dir)
+            return mark_result()
+
+        with patch("worker.jobs.mark_submission", side_effect=fake_mark):
+            jobs.process_job(fake, mark_job())
+        self.assertEqual(seen["submission"]["answers"],
+                         [{"question_id": "q1", "text": "Water moves."},
+                          {"question_id": "q2", "text": "Enzymes rule."}])
+        self.assertEqual(seen["rubric"],
+                         {"assessment_id": AID, "points": GOOD_POINTS})
+        run_dir = seen["run_dir"]
+        self.assertEqual(run_dir.parent, Path("worker") / "runs")
+        self.assertTrue(run_dir.name.startswith("%s_sub-1_" % AID))
+        rows = result_upserts(fake)
+        self.assertEqual(len(rows), 1)
+        row, conflict = rows[0]
+        self.assertEqual(conflict, "submission_id")
+        self.assertEqual(row["submission_id"], "sub-1")
+        self.assertEqual(row["status"], "marked")
+        self.assertEqual(row["segments"], {})
+        self.assertEqual(row["usage"],
+                         {"input_tokens": 7, "output_tokens": 8,
+                          "segmentation": {"input_tokens": 0,
+                                           "output_tokens": 0}})
+        self.assertEqual(row["total_marks"], 5)
+        self.assertEqual(row["max_marks"], 6)
+        self.assertIn("marked_at", row)
+        self.assertFalse(row["approved"])
+        self.assertFalse(row["published"])
+        self.assertNotIn("overrides", row)
+        done = status_updates(fake, "done", "job-m")
+        self.assertEqual(len(done), 1)
+        self.assertEqual(done[0]["progress"]["total"], 1)
+        self.assertEqual(done[0]["progress"]["done"], 1)
+
+    def test_only_unmarked_submitted(self):
+        fake = FakeClient(
+            rubric_approved=True,
+            submissions=[dict(SUBMITTED_1), dict(SUBMITTED_2),
+                         dict(DRAFT_SUB)],
+            results=[{"submission_id": "sub-1"}])
+        marked = []
+
+        def fake_mark(assessment, rubric, submission, submission_dir,
+                      run_dir):
+            marked.append(submission["student_id"])
+            return mark_result()
+
+        with patch("worker.jobs.mark_submission", side_effect=fake_mark):
+            jobs.process_job(fake, mark_job(), workers=1)
+        self.assertEqual(marked, ["stu-2"])
+
+    def test_incomplete_unapproved_retried(self):
+        fake = FakeClient(
+            rubric_approved=True,
+            submissions=[dict(SUBMITTED_1)],
+            results=[{"submission_id": "sub-1", "status": "incomplete",
+                      "approved": False}])
+        marked = []
+
+        def fake_mark(assessment, rubric, submission, submission_dir,
+                      run_dir):
+            marked.append(submission["student_id"])
+            return mark_result()
+
+        with patch("worker.jobs.mark_submission", side_effect=fake_mark):
+            jobs.process_job(fake, mark_job(), workers=1)
+        self.assertEqual(marked, ["stu-1"])
+        selects = [params for table, params in fake.select_calls
+                   if table == "results"]
+        self.assertEqual(selects[0]["select"],
+                         "submission_id,status,approved")
+
+    def test_finished_and_approved_skipped(self):
+        subs = [{"id": "sub-%d" % n, "student_id": "stu-%d" % n,
+                 "status": "submitted", "script_path": None}
+                for n in (1, 2, 3, 4)]
+        fake = FakeClient(
+            rubric_approved=True, submissions=subs,
+            results=[
+                {"submission_id": "sub-1", "status": "marked",
+                 "approved": False},
+                {"submission_id": "sub-2", "status": "needs_review",
+                 "approved": False},
+                {"submission_id": "sub-3", "status": "incomplete",
+                 "approved": True},
+                {"submission_id": "sub-4", "status": "marked",
+                 "approved": True},
+            ])
+        with patch("worker.jobs.mark_submission") as mark:
+            jobs.process_job(fake, mark_job())
+            mark.assert_not_called()
+        done = status_updates(fake, "done", "job-m")
+        self.assertEqual(len(done), 1)
+        self.assertEqual(done[0]["progress"]["note"], "Nothing new to mark.")
+
+    def test_unapproved_rubric_fails(self):
+        fake = FakeClient(rubric_approved=False,
+                          submissions=[dict(SUBMITTED_1)])
+        with patch("worker.jobs.mark_submission") as mark:
+            jobs.process_job(fake, mark_job())
+            mark.assert_not_called()
+        errors = status_updates(fake, "error", "job-m")
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0]["error"], "The rubric isn't approved.")
+        self.assertEqual(fake.upserts, [])
+
+    def test_nothing_new_to_mark(self):
+        fake = FakeClient(
+            rubric_approved=True, submissions=[dict(SUBMITTED_1)],
+            results=[{"submission_id": "sub-1"}])
+        with patch("worker.jobs.mark_submission") as mark:
+            jobs.process_job(fake, mark_job())
+            mark.assert_not_called()
+        done = status_updates(fake, "done", "job-m")
+        self.assertEqual(len(done), 1)
+        self.assertEqual(done[0]["progress"]["total"], 0)
+        self.assertEqual(done[0]["progress"]["note"], "Nothing new to mark.")
+
+    def test_pdf_empty_pages_need_review(self):
+        sub = dict(SUBMITTED_1, script_path="aid/stu/script.pdf")
+        fake = FakeClient(
+            rubric_approved=True, answer_mode="pdf", submissions=[sub],
+            blobs={"aid/stu/script.pdf": b"%PDF-1.4 fake"})
+        with patch("worker.jobs.extract_pdf_pages",
+                   return_value=["", "   "]), \
+                patch("worker.jobs.locate_answers") as locate, \
+                patch("worker.jobs.mark_submission") as mark:
+            jobs.process_job(fake, mark_job())
+            locate.assert_not_called()
+            mark.assert_not_called()
+        self.assertEqual(fake.downloaded,
+                         [("answer-pdfs", "aid/stu/script.pdf")])
+        rows = result_upserts(fake)
+        self.assertEqual(len(rows), 1)
+        row, _ = rows[0]
+        self.assertEqual(row["status"], "needs_review")
+        self.assertEqual(row["flags"], [
+            {"question_id": "q1", "reason": "illegible",
+             "note": jobs.ILLEGIBLE_NOTE},
+            {"question_id": "q2", "reason": "illegible",
+             "note": jobs.ILLEGIBLE_NOTE},
+        ])
+        for code in ("q1", "q2"):
+            self.assertFalse(row["segments"][code]["found"])
+        self.assertEqual(row["usage"], jobs._empty_usage())
+
+    def test_pdf_segments_marked(self):
+        sub = dict(SUBMITTED_1, script_path="aid/stu/script.pdf")
+        fake = FakeClient(
+            rubric_approved=True, answer_mode="pdf", submissions=[sub],
+            blobs={"aid/stu/script.pdf": b"%PDF-1.4 fake"})
+        segments = {
+            "q1": {"found": True, "start_quote": "Q1 alpha",
+                   "page": 1, "text": "Q1 alpha beta gamma."},
+            "q2": {"found": False, "start_quote": None, "page": None,
+                   "text": ""},
+        }
+        seen = {}
+
+        def fake_mark(assessment, rubric, submission, submission_dir,
+                      run_dir):
+            seen["submission"] = submission
+            return mark_result()
+
+        with patch("worker.jobs.extract_pdf_pages",
+                   return_value=["Q1 alpha beta gamma.", "more"]), \
+                patch("worker.jobs.locate_answers",
+                      return_value={"segments": segments,
+                                    "usage": {"input_tokens": 3,
+                                              "output_tokens": 4}}), \
+                patch("worker.jobs.mark_submission", side_effect=fake_mark):
+            jobs.process_job(fake, mark_job())
+        self.assertEqual(seen["submission"]["answers"],
+                         [{"question_id": "q1",
+                           "text": "Q1 alpha beta gamma."},
+                          {"question_id": "q2", "text": ""}])
+        row, _ = result_upserts(fake)[0]
+        self.assertEqual(row["segments"], segments)
+        self.assertEqual(row["usage"],
+                         {"input_tokens": 10, "output_tokens": 12,
+                          "segmentation": {"input_tokens": 3,
+                                           "output_tokens": 4}})
+
+    def test_failing_submission_isolated(self):
+        fake = FakeClient(
+            rubric_approved=True,
+            submissions=[dict(SUBMITTED_1), dict(SUBMITTED_2)])
+        with patch("worker.jobs.mark_submission",
+                   side_effect=[RuntimeError("boom " + "x" * 600),
+                                 mark_result()]):
+            jobs.process_job(fake, mark_job(), workers=1)
+        rows = {row["submission_id"]: row
+                for row, _ in result_upserts(fake)}
+        self.assertEqual(set(rows), {"sub-1", "sub-2"})
+        self.assertEqual(rows["sub-1"]["status"], "incomplete")
+        self.assertEqual(rows["sub-1"]["flags"],
+                         [{"reason": "other",
+                           "note": "boom " + "x" * 495}])
+        self.assertEqual(rows["sub-2"]["status"], "marked")
+        self.assertNotIn("overrides", rows["sub-1"])
+        self.assertNotIn("overrides", rows["sub-2"])
+        done = status_updates(fake, "done", "job-m")
+        self.assertEqual(done[0]["progress"]["done"], 2)
+        self.assertEqual(done[0]["progress"]["incomplete"], 1)
+
+    def test_no_script_pdf_is_incomplete(self):
+        fake = FakeClient(rubric_approved=True, answer_mode="pdf",
+                          submissions=[dict(SUBMITTED_1)])
+        with patch("worker.jobs.mark_submission") as mark:
+            jobs.process_job(fake, mark_job())
+            mark.assert_not_called()
+        row, _ = result_upserts(fake)[0]
+        self.assertEqual(row["status"], "incomplete")
+        self.assertEqual(row["flags"],
+                         [{"reason": "other", "note": "no script uploaded"}])
+
+    def test_ctrl_c_during_marking(self):
+        fake = FakeClient(rubric_approved=True,
+                          submissions=[dict(SUBMITTED_1)])
+        with patch("worker.jobs.mark_submission",
+                   side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                jobs.process_job(fake, mark_job(), workers=1)
+        errors = status_updates(fake, "error", "job-m")
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0]["error"], jobs.STOPPED_MESSAGE)
+
+
+class MarkClaimingTests(unittest.TestCase):
+    def test_mark_all_claimed_after_empty_build(self):
+        fake = FakeClient(rubric_approved=True,
+                          submissions=[dict(SUBMITTED_1)])
+        fake.claims = [
+            [],
+            [{"id": "job-m", "assessment_id": AID, "type": "mark_all"}],
+            [],
+            [],
+        ]
+        with patch("worker.jobs.mark_submission",
+                   return_value=mark_result()):
+            self.assertEqual(jobs.run_loop(fake, once=True), 0)
+        self.assertEqual(
+            [params["p_type"] for _, params in fake.rpc_calls],
+            ["build_rubric", "mark_all", "build_rubric", "mark_all"])
+        self.assertEqual(len(status_updates(fake, "done", "job-m")), 1)
+
+
+class ProgressThreadTests(unittest.TestCase):
+    def test_concurrent_updates(self):
+        fake = FakeClient()
+        progress = jobs._Progress(fake, "job-1")
+
+        def hammer(n):
+            for _ in range(50):
+                progress.update(done=n)
+
+        threads = [threading.Thread(target=hammer, args=(i,))
+                   for i in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        progress.update(force=True, done="final")
+        self.assertEqual(progress.state["done"], "final")
+        writes = [values for table, values, _ in fake.updates
+                  if table == "marking_jobs"]
+        self.assertGreaterEqual(len(writes), 2)
 
 
 class StubHttp:
