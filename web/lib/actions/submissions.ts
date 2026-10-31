@@ -23,7 +23,23 @@ function friendlySubmitError(message: string): string {
     return "This assessment is closed. Submissions are no longer accepted.";
   if (message.includes("no submission found"))
     return "No draft submission was found. Save a draft first.";
+  if (message.includes("no script uploaded"))
+    return "Upload your answer script (PDF) before submitting.";
   return "Could not submit. Try again.";
+}
+
+function friendlyAttachError(message: string): string {
+  if (message.includes("no submission found"))
+    return "No draft submission was found.";
+  if (message.includes("already submitted"))
+    return "This submission was already submitted.";
+  if (message.includes("not a pdf assessment"))
+    return "This assessment does not take an answer script.";
+  if (message.includes("assessment is closed"))
+    return "This assessment is closed. The script can no longer be saved.";
+  if (message.includes("script not uploaded"))
+    return "Upload your script PDF first.";
+  return "Could not save the script. Try again.";
 }
 
 export async function saveDraft(
@@ -55,10 +71,7 @@ export async function saveDraft(
   for (const a of input.answers) {
     if (!validIds.has(a.questionId))
       return { ok: false, error: "Unknown question." };
-    if (
-      a.pdfPath !== null &&
-      a.pdfPath !== `${input.assessmentId}/${profile.id}/${a.questionId}.pdf`
-    )
+    if (a.pdfPath !== null)
       return { ok: false, error: "Invalid file path." };
   }
   const { data: assessment } = await supabase
@@ -94,6 +107,23 @@ export async function saveDraft(
     return { ok: false, error: "Could not save the draft. Try again." };
   }
   revalidatePath(`/student/assessments/${input.assessmentId}`);
+  revalidatePath("/student");
+  return { ok: true };
+}
+
+export async function attachScript(
+  assessmentId: string,
+): Promise<SubmissionResult> {
+  await requireRole("student");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("attach_script", {
+    p_assessment_id: assessmentId,
+  });
+  if (error) {
+    console.error("attachScript failed:", error.message);
+    return { ok: false, error: friendlyAttachError(error.message) };
+  }
+  revalidatePath(`/student/assessments/${assessmentId}`);
   revalidatePath("/student");
   return { ok: true };
 }

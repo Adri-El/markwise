@@ -15,39 +15,21 @@ function capitalize(word: string): string {
 function ReadonlyAnswers({
   questions,
   answersByQuestion,
-  signedUrls,
 }: {
   questions: Question[];
   answersByQuestion: Map<string, Answer>;
-  signedUrls: Map<string, string>;
 }) {
   return (
     <div className="space-y-4">
       {questions.map((q) => {
         const answer = answersByQuestion.get(q.id);
-        const url = signedUrls.get(q.id);
         return (
           <Card key={q.id} title={`${q.code} · ${q.max_marks} marks`}>
             <div className="space-y-2">
               <p className="whitespace-pre-wrap text-sm text-slate-700">
                 {q.prompt}
               </p>
-              {answer?.pdf_path ? (
-                url ? (
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm font-medium text-indigo-600 hover:underline"
-                  >
-                    View submitted PDF
-                  </a>
-                ) : (
-                  <p className="text-sm text-slate-500">
-                    A PDF was uploaded but the link expired. Reload the page.
-                  </p>
-                )
-              ) : answer && answer.text.trim() !== "" ? (
+              {answer && answer.text.trim() !== "" ? (
                 <p className="whitespace-pre-wrap text-sm text-slate-900">
                   {answer.text}
                 </p>
@@ -59,6 +41,27 @@ function ReadonlyAnswers({
         );
       })}
     </div>
+  );
+}
+
+function ScriptLink({ url }: { url: string | null }) {
+  return (
+    <Card title="Your script">
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm font-medium text-indigo-600 hover:underline"
+        >
+          View your script
+        </a>
+      ) : (
+        <p className="text-sm text-slate-500">
+          The script link expired. Reload the page.
+        </p>
+      )}
+    </Card>
   );
 }
 
@@ -137,14 +140,21 @@ export default async function StudentAssessmentPage({
   }
   const answersByQuestion = new Map(answerList.map((x) => [x.question_id, x]));
 
-  const signedUrls = new Map<string, string>();
-  if (submitted || (closed && answerList.length > 0)) {
-    for (const answer of answerList) {
-      if (!answer.pdf_path) continue;
+  const isPdf = a.answer_mode === "pdf";
+  const scriptAttached = !!submission?.script_path;
+  let scriptUploadedAt: string | null = null;
+  let scriptUrl: string | null = null;
+  if (isPdf && submission?.script_path) {
+    const { data: files } = await supabase.storage
+      .from("answer-pdfs")
+      .list(`${id}/${profile.id}`);
+    scriptUploadedAt =
+      (files ?? []).find((f) => f.name === "script.pdf")?.updated_at ?? null;
+    if (submitted || closed) {
       const { data } = await supabase.storage
         .from("answer-pdfs")
-        .createSignedUrl(answer.pdf_path, 600);
-      if (data?.signedUrl) signedUrls.set(answer.question_id, data.signedUrl);
+        .createSignedUrl(submission.script_path, 600);
+      scriptUrl = data?.signedUrl ?? null;
     }
   }
 
@@ -178,11 +188,14 @@ export default async function StudentAssessmentPage({
           <p className="text-sm text-slate-600">
             Submitted <LocalDateTime value={submission.submitted_at} />
           </p>
-          <ReadonlyAnswers
-            questions={questionList}
-            answersByQuestion={answersByQuestion}
-            signedUrls={signedUrls}
-          />
+          {isPdf ? (
+            <ScriptLink url={scriptUrl} />
+          ) : (
+            <ReadonlyAnswers
+              questions={questionList}
+              answersByQuestion={answersByQuestion}
+            />
+          )}
         </div>
       ) : !opened ? (
         <Card title="Not open yet">
@@ -196,12 +209,15 @@ export default async function StudentAssessmentPage({
             This assessment closed on <LocalDateTime value={a.closes_at} />.
             No submission was made.
           </p>
-          {answerList.length > 0 && (
-            <ReadonlyAnswers
-              questions={questionList}
-              answersByQuestion={answersByQuestion}
-              signedUrls={signedUrls}
-            />
+          {isPdf ? (
+            scriptAttached && <ScriptLink url={scriptUrl} />
+          ) : (
+            answerList.length > 0 && (
+              <ReadonlyAnswers
+                questions={questionList}
+                answersByQuestion={answersByQuestion}
+              />
+            )
           )}
         </div>
       ) : submission ? (
@@ -224,6 +240,8 @@ export default async function StudentAssessmentPage({
               },
             ]),
           )}
+          scriptAttached={scriptAttached}
+          scriptUploadedAt={scriptUploadedAt}
         />
       ) : (
         <Card title="Something went wrong">

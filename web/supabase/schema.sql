@@ -129,6 +129,9 @@ alter table assessments drop constraint if exists assessments_closes_after_opens
 alter table assessments add constraint assessments_closes_after_opens
   check (closes_at is null or opens_at is null or closes_at > opens_at);
 
+---------- v3: one script PDF per submission ----------
+alter table submissions add column if not exists script_path text;
+
 ---------- helpers (after tables: language sql bodies validate at creation) ----------
 -- Security-definer membership checks. Policies on assessments, enrollments and
 -- profiles use these instead of querying each other's tables, or Postgres
@@ -401,10 +404,41 @@ begin
      and (closes_at is null or now() <= closes_at)
     into v_open from assessments where id = p_assessment_id;
   if not v_open then raise exception 'assessment is closed'; end if;
+  if (select answer_mode from assessments where id = p_assessment_id) = 'pdf'
+    and v_sub.script_path is null then
+    raise exception 'no script uploaded';
+  end if;
   update submissions set status = 'submitted', submitted_at = now()
   where id = v_sub.id;
 end; $$;
 grant execute on function submit_submission(uuid) to authenticated;
+
+---------- attach script (one PDF per submission; path computed server-side) ----------
+create or replace function attach_script(p_assessment_id uuid)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare v_sub submissions%rowtype; v_mode text; v_open boolean; v_path text;
+begin
+  v_path := p_assessment_id::text || '/' || auth.uid()::text || '/script.pdf';
+  select * into v_sub from submissions
+  where assessment_id = p_assessment_id and student_id = auth.uid();
+  if v_sub.id is null then raise exception 'no submission found'; end if;
+  if v_sub.status <> 'draft' then raise exception 'already submitted'; end if;
+  select answer_mode,
+    (opens_at is null or now() >= opens_at)
+      and (closes_at is null or now() <= closes_at)
+    into v_mode, v_open from assessments where id = p_assessment_id;
+  if v_mode <> 'pdf' then raise exception 'not a pdf assessment'; end if;
+  if not v_open then raise exception 'assessment is closed'; end if;
+  if not exists (select 1 from storage.objects
+    where bucket_id = 'answer-pdfs' and name = v_path) then
+    raise exception 'script not uploaded';
+  end if;
+  update submissions set script_path = v_path where id = v_sub.id;
+end; $$;
+
+revoke execute on function attach_script(uuid) from public, anon;
+grant execute on function attach_script(uuid) to authenticated;
 
 ---------- atomic assessment creation (one transaction, invoker RLS applies) ----------
 -- p: {title, kind, instructions, opens_at, closes_at, answer_mode,
@@ -468,7 +502,7 @@ grant execute on function create_assessment(jsonb) to authenticated;
 
 ---------- storage (private answer PDFs) ----------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('answer-pdfs', 'answer-pdfs', false, 10485760, '{application/pdf}')
+values ('answer-pdfs', 'answer-pdfs', false, 26214400, '{application/pdf}')
 on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;

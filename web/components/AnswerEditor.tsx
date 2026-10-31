@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { saveDraft, submitWork } from "@/lib/actions/submissions";
+import { attachScript, saveDraft, submitWork } from "@/lib/actions/submissions";
 import { MAX_ANSWER_CHARS, type AnswerMode } from "@/lib/types";
 import Button from "./ui/Button";
 import Card from "./ui/Card";
@@ -12,7 +12,7 @@ import Label from "./ui/Label";
 import LocalDateTime from "./LocalDateTime";
 import Textarea from "./ui/Textarea";
 
-const MAX_PDF_BYTES = 10_485_760; // 10 MB, matches the answer-pdfs bucket
+const MAX_SCRIPT_BYTES = 26_214_400; // 25 MB, matches the answer-pdfs bucket
 
 interface DraftAnswer {
   text: string;
@@ -32,23 +32,27 @@ export default function AnswerEditor({
   answerMode,
   questions,
   initial,
+  scriptAttached,
+  scriptUploadedAt,
 }: {
   assessmentId: string;
   studentId: string;
   answerMode: AnswerMode;
   questions: EditorQuestion[];
   initial: Record<string, DraftAnswer>;
+  scriptAttached: boolean;
+  scriptUploadedAt: string | null;
 }) {
   const router = useRouter();
   const [drafts, setDrafts] = useState<Record<string, DraftAnswer>>(initial);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [questionErrors, setQuestionErrors] = useState<Record<string, string>>(
-    {},
-  );
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [uploadingQ, setUploadingQ] = useState<string | null>(null);
+  const [hasScript, setHasScript] = useState(scriptAttached);
+  const [scriptAt, setScriptAt] = useState<string | null>(scriptUploadedAt);
+  const [uploadingScript, setUploadingScript] = useState(false);
+  const [scriptError, setScriptError] = useState("");
 
   function draftFor(questionId: string): DraftAnswer {
     return drafts[questionId] ?? { text: "", pdfPath: null };
@@ -88,53 +92,40 @@ export default function AnswerEditor({
     }
   }
 
-  async function onPdfChange(
-    questionId: string,
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) {
+  async function onScriptChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    setError("");
-    setQuestionErrors((prev) => ({ ...prev, [questionId]: "" }));
+    setScriptError("");
     if (!file.name.toLowerCase().endsWith(".pdf")) {
-      setError(`${file.name}: only PDF files are allowed.`);
+      setScriptError(`${file.name}: only PDF files are allowed.`);
       return;
     }
-    if (file.size <= 0 || file.size > MAX_PDF_BYTES) {
-      setError(`${file.name}: file must be between 1 byte and 10 MB.`);
+    if (file.size <= 0 || file.size > MAX_SCRIPT_BYTES) {
+      setScriptError(`${file.name}: file must be between 1 byte and 25 MB.`);
       return;
     }
-    setUploadingQ(questionId);
+    setUploadingScript(true);
     try {
       const supabase = createClient();
-      const path = `${assessmentId}/${studentId}/${questionId}.pdf`;
       const { error: uploadError } = await supabase.storage
         .from("answer-pdfs")
-        .upload(path, file, { upsert: true });
+        .upload(`${assessmentId}/${studentId}/script.pdf`, file, {
+          upsert: true,
+        });
       if (uploadError) {
-        setError("Upload failed. Try again.");
+        setScriptError("Upload failed. Try again.");
         return;
       }
-      setDraft(questionId, { text: "", pdfPath: path });
-      const saved = await saveDraft({
-        assessmentId,
-        answers: questions.map((q) => ({
-          questionId: q.id,
-          text: q.id === questionId ? "" : draftFor(q.id).text,
-          pdfPath: q.id === questionId ? path : draftFor(q.id).pdfPath,
-        })),
-      });
-      if (!saved.ok) {
-        setQuestionErrors((prev) => ({
-          ...prev,
-          [questionId]: saved.error ?? "Could not save the draft.",
-        }));
-      } else {
-        setSavedAt(new Date().toISOString());
+      const attached = await attachScript(assessmentId);
+      if (!attached.ok) {
+        setScriptError(attached.error ?? "Could not save the script.");
+        return;
       }
+      setHasScript(true);
+      setScriptAt(new Date().toISOString());
     } finally {
-      setUploadingQ(null);
+      setUploadingScript(false);
     }
   }
 
@@ -165,6 +156,79 @@ export default function AnswerEditor({
     }
   }
 
+  async function onSubmitPdf() {
+    setError("");
+    if (!hasScript) {
+      setError("Upload your answer script (PDF) before submitting.");
+      return;
+    }
+    const confirmed = window.confirm(
+      "You can't change your script after submitting. Submit?",
+    );
+    if (!confirmed) return;
+    setSubmitting(true);
+    try {
+      const result = await submitWork(assessmentId);
+      if (!result.ok) {
+        setError(result.error ?? "Could not submit.");
+        return;
+      }
+      router.refresh();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (answerMode === "pdf") {
+    return (
+      <div className="space-y-4">
+        {questions.map((q) => (
+          <Card key={q.id} title={`${q.code} · ${q.max_marks} marks`}>
+            <p className="whitespace-pre-wrap text-sm text-slate-700">
+              {q.prompt}
+            </p>
+          </Card>
+        ))}
+        <Card
+          title="Your answer script"
+          subtitle="Upload one PDF with your answers to all questions. Label each answer with its question number (Q1, Q2, …)."
+        >
+          <div className="space-y-3">
+            {hasScript && (
+              <p className="text-sm font-medium text-slate-900">
+                Script uploaded{" "}
+                {scriptAt ? <LocalDateTime value={scriptAt} /> : null}
+              </p>
+            )}
+            <div>
+              <Label htmlFor="answer-script">
+                {hasScript ? "Replace script" : "Upload script"}
+              </Label>
+              <input
+                id="answer-script"
+                type="file"
+                accept=".pdf,application/pdf"
+                disabled={uploadingScript}
+                onChange={onScriptChange}
+                className="block w-full text-sm text-slate-700 file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-slate-300 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-slate-900 hover:file:bg-slate-50 disabled:opacity-50"
+              />
+              {uploadingScript && (
+                <p className="mt-1 text-sm text-slate-600">Uploading…</p>
+              )}
+            </div>
+            <FieldError message={scriptError} />
+          </div>
+        </Card>
+        <FieldError message={error} />
+        <div>
+          <Button loading={submitting} onClick={onSubmitPdf}>
+            Submit
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {questions.map((q) => {
@@ -175,46 +239,19 @@ export default function AnswerEditor({
               <p className="whitespace-pre-wrap text-sm text-slate-700">
                 {q.prompt}
               </p>
-              {answerMode === "typed" ? (
-                <div>
-                  <Label htmlFor={`answer-${q.id}`}>Your answer</Label>
-                  <Textarea
-                    id={`answer-${q.id}`}
-                    value={draft.text}
-                    maxLength={MAX_ANSWER_CHARS}
-                    rows={6}
-                    onChange={(e) =>
-                      setDraft(q.id, { text: e.target.value })
-                    }
-                  />
-                  <p className="mt-1 text-xs text-slate-600">
-                    {draft.text.length} / {MAX_ANSWER_CHARS} characters
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <Label htmlFor={`answer-pdf-${q.id}`}>
-                    {draft.pdfPath ? "Replace PDF" : "Upload PDF"}
-                  </Label>
-                  {draft.pdfPath && (
-                    <p className="mb-1 text-sm font-medium text-slate-900">
-                      PDF uploaded
-                    </p>
-                  )}
-                  <input
-                    id={`answer-pdf-${q.id}`}
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    disabled={uploadingQ === q.id}
-                    onChange={(e) => onPdfChange(q.id, e)}
-                    className="block w-full text-sm text-slate-700 file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-slate-300 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-slate-900 hover:file:bg-slate-50 disabled:opacity-50"
-                  />
-                  {uploadingQ === q.id && (
-                    <p className="mt-1 text-sm text-slate-600">Uploading…</p>
-                  )}
-                </div>
-              )}
-              <FieldError message={questionErrors[q.id]} />
+              <div>
+                <Label htmlFor={`answer-${q.id}`}>Your answer</Label>
+                <Textarea
+                  id={`answer-${q.id}`}
+                  value={draft.text}
+                  maxLength={MAX_ANSWER_CHARS}
+                  rows={6}
+                  onChange={(e) => setDraft(q.id, { text: e.target.value })}
+                />
+                <p className="mt-1 text-xs text-slate-600">
+                  {draft.text.length} / {MAX_ANSWER_CHARS} characters
+                </p>
+              </div>
             </div>
           </Card>
         );

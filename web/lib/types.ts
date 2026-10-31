@@ -63,6 +63,7 @@ export interface Submission {
   submitted_at: string | null;
   created_at: string;
   updated_at: string;
+  script_path: string | null;
 }
 
 export interface Answer {

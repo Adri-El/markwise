@@ -341,6 +341,11 @@ export default function AssessmentForm() {
             { value: "pdf", label: "PDF" },
           ]}
         />
+        {answerMode === "pdf" && (
+          <p className="mt-2 text-sm text-slate-600">
+            Students upload one PDF containing all their answers.
+          </p>
+        )}
       </Card>
 
       <div className="space-y-4">
