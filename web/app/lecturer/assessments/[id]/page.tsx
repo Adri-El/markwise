@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
+import { effectiveScores, hasOverrides } from "@/lib/scoring";
+import type { Award, ResultOverrides } from "@/lib/scoring";
 import { createClient } from "@/lib/supabase/server";
 import { DRAFT_BLOCK_REASON } from "@/lib/types";
 import type {
@@ -122,8 +124,8 @@ export default async function AssessmentDetailPage({
   interface ResultShape {
     submission_id: string;
     status: "marked" | "needs_review" | "incomplete";
-    total_marks: number | null;
-    max_marks: number | null;
+    awards: unknown;
+    overrides: unknown;
     flags: unknown;
     marked_at: string | null;
     approved: boolean;
@@ -139,7 +141,7 @@ export default async function AssessmentDetailPage({
     const { data: results } = await supabase
       .from("results")
       .select(
-        "submission_id, status, total_marks, max_marks, flags, marked_at, approved",
+        "submission_id, status, awards, overrides, flags, marked_at, approved",
       )
       .in("submission_id", subIds);
     resultShapes = (results ?? []) as ResultShape[];
@@ -168,15 +170,24 @@ export default async function AssessmentDetailPage({
     submittedList.map((s) => {
       const result = resultBySub.get(s.id);
       const profile = profileById.get(s.student_id);
+      const awards = Array.isArray(result?.awards)
+        ? (result.awards as Award[])
+        : [];
+      const overrides = (result?.overrides ?? {}) as ResultOverrides;
+      const effective = result
+        ? effectiveScores(questionList, rubricPoints, awards, overrides)
+        : null;
       return {
         submissionId: s.id,
         studentName: profile?.full_name ?? "Unknown student",
         matric: profile?.matric_number ?? null,
         status: result?.status ?? null,
-        total: result?.total_marks ?? null,
-        max: result?.max_marks ?? null,
+        total: effective?.total ?? null,
+        max: effective?.max ?? null,
         flags: Array.isArray(result?.flags) ? result.flags.length : 0,
         markedAt: result?.marked_at ?? null,
+        edited: result ? hasOverrides(overrides) : false,
+        approved: result?.approved ?? false,
       };
     }),
   );

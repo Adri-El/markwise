@@ -11,6 +11,8 @@ export interface ResultRow {
   max: number | null;
   flags: number;
   markedAt: string | null;
+  edited: boolean;
+  approved: boolean;
 }
 
 const STATUS_RANK: Record<NonNullable<ResultRow["status"]>, number> = {
@@ -54,6 +56,7 @@ export default function ResultsTable({
               <th className="py-2 pr-4 font-medium">Status</th>
               <th className="py-2 pr-4 font-medium">Score</th>
               <th className="py-2 pr-4 font-medium">Flags</th>
+              <th className="py-2 pr-4 font-medium">Approved</th>
               <th className="py-2 font-medium">Marked</th>
             </tr>
           </thead>
@@ -61,7 +64,7 @@ export default function ResultsTable({
             {rows.map((row) => (
               <tr key={row.submissionId}>
                 <td className="py-2 pr-4 text-slate-900">
-                  {row.status === "marked" ? (
+                  {row.status !== null ? (
                     <a
                       href={`/lecturer/assessments/${assessmentId}/results/${row.submissionId}`}
                       className="font-medium text-indigo-600 hover:underline"
@@ -82,8 +85,18 @@ export default function ResultsTable({
                   {row.total === null || row.max === null
                     ? "—"
                     : `${row.total} / ${row.max}`}
+                  {row.edited && (
+                    <span className="ml-1 text-xs text-slate-400">edited</span>
+                  )}
                 </td>
                 <td className="py-2 pr-4 text-slate-600">{row.flags}</td>
+                <td className="py-2 pr-4">
+                  {row.approved ? (
+                    <Badge tone="success">Approved</Badge>
+                  ) : (
+                    <span className="text-slate-600">—</span>
+                  )}
+                </td>
                 <td className="py-2 text-slate-600">
                   <LocalDateTime value={row.markedAt} />
                 </td>
