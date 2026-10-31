@@ -65,3 +65,10 @@ export function effectiveScores(
 export function hasOverrides(overrides: ResultOverrides | null): boolean {
   return Object.keys(overrides?.points ?? {}).length > 0;
 }
+
+export interface ResultFinal {
+  questions: Record<string, { marks: number; max: number; comment: string }>;
+  total: number;
+  max: number;
+  approved_at: string;
+}

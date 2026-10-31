@@ -14,11 +14,13 @@ import type {
 } from "@/lib/types";
 import Alert from "@/components/ui/Alert";
 import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import CopyButton from "@/components/CopyButton";
 import CourseNotesUpload from "@/components/CourseNotesUpload";
 import LocalDateTime from "@/components/LocalDateTime";
 import MarkAllStatus from "@/components/MarkAllStatus";
+import PublishControls from "@/components/PublishControls";
 import ResultsTable, {
   sortResultRows,
   type ResultRow,
@@ -129,6 +131,7 @@ export default async function AssessmentDetailPage({
     flags: unknown;
     marked_at: string | null;
     approved: boolean;
+    published: boolean;
   }
   let resultShapes: ResultShape[] = [];
   let profileShapes: {
@@ -141,7 +144,7 @@ export default async function AssessmentDetailPage({
     const { data: results } = await supabase
       .from("results")
       .select(
-        "submission_id, status, awards, overrides, flags, marked_at, approved",
+        "submission_id, status, awards, overrides, flags, marked_at, approved, published",
       )
       .in("submission_id", subIds);
     resultShapes = (results ?? []) as ResultShape[];
@@ -188,9 +191,15 @@ export default async function AssessmentDetailPage({
         markedAt: result?.marked_at ?? null,
         edited: result ? hasOverrides(overrides) : false,
         approved: result?.approved ?? false,
+        published: result?.published ?? false,
       };
     }),
   );
+  const approvedCount = resultTableRows.filter((r) => r.approved).length;
+  const publishedCount = resultTableRows.filter((r) => r.published).length;
+  const publishableCount = resultTableRows.filter(
+    (r) => r.approved && !r.published,
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -289,7 +298,26 @@ export default async function AssessmentDetailPage({
         </dl>
       </Card>
       {submittedList.length > 0 && (
-        <ResultsTable assessmentId={id} rows={resultTableRows} />
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">
+            {approvedCount} of {resultTableRows.length} approved ·{" "}
+            {publishedCount} published
+          </p>
+          <div className="flex flex-wrap items-start gap-2">
+            <PublishControls
+              assessmentId={id}
+              publishable={publishableCount}
+              published={publishedCount}
+            />
+            <Button
+              variant="secondary"
+              href={`/lecturer/assessments/${id}/export`}
+            >
+              Download Excel
+            </Button>
+          </div>
+          <ResultsTable assessmentId={id} rows={resultTableRows} />
+        </div>
       )}
       {rubricPoints.length > 0 && (
         <RubricEditor

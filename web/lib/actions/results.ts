@@ -2,9 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRole } from "../auth";
+import { effectiveScores } from "../scoring";
+import type {
+  Award,
+  ResultFinal,
+  ResultOverrides,
+  PointOverride,
+} from "../scoring";
 import { createClient } from "../supabase/server";
-import type { ResultOverrides, PointOverride } from "../scoring";
-import type { RubricPoint } from "../types";
+import type { Question, RubricPoint } from "../types";
 
 export interface OverrideResult {
   ok: boolean;
@@ -18,6 +24,9 @@ interface OwnedResult {
   overrides: ResultOverrides;
   published: boolean;
   points: RubricPoint[];
+  questions: Question[];
+  scores: Record<string, { marks: number; max: number; comment: string }>;
+  awards: Award[];
 }
 
 async function loadOwnedResult(
@@ -39,11 +48,16 @@ async function loadOwnedResult(
   if (!assessment) return { error: "Submission not found." };
   const { data: resultRows } = await supabase
     .from("results")
-    .select("overrides, published")
+    .select("overrides, published, scores, awards")
     .eq("submission_id", submissionId)
     .limit(1);
   const row = (resultRows ?? [])[0] as
-    | { overrides: unknown; published: boolean }
+    | {
+        overrides: unknown;
+        published: boolean;
+        scores: unknown;
+        awards: unknown;
+      }
     | undefined;
   if (!row) return { error: "No result to change yet." };
   const { data: rubricRows } = await supabase
@@ -55,11 +69,29 @@ async function loadOwnedResult(
   const points = Array.isArray(saved?.points)
     ? (saved.points as RubricPoint[])
     : [];
+  const { data: questionRows } = await supabase
+    .from("questions")
+    .select("*")
+    .eq("assessment_id", assessmentId)
+    .order("position");
   const overrides =
     row.overrides !== null && typeof row.overrides === "object"
       ? (row.overrides as ResultOverrides)
       : {};
-  return { assessmentId, overrides, published: row.published, points };
+  const scores =
+    row.scores !== null && typeof row.scores === "object"
+      ? (row.scores as OwnedResult["scores"])
+      : {};
+  const awards = Array.isArray(row.awards) ? (row.awards as Award[]) : [];
+  return {
+    assessmentId,
+    overrides,
+    published: row.published,
+    points,
+    questions: (questionRows ?? []) as Question[],
+    scores,
+    awards,
+  };
 }
 
 function validMarks(marks: number, max: number): boolean {
@@ -155,10 +187,31 @@ export async function approveResult(
   await requireRole("lecturer");
   const loaded = await loadOwnedResult(submissionId);
   if ("error" in loaded) return { ok: false, error: loaded.error };
+  const effective = effectiveScores(
+    loaded.questions,
+    loaded.points,
+    loaded.awards,
+    loaded.overrides,
+  );
+  const final: ResultFinal = {
+    questions: Object.fromEntries(
+      Object.entries(effective.perQuestion).map(([code, s]) => [
+        code,
+        {
+          marks: s.final,
+          max: s.max,
+          comment: loaded.scores[code]?.comment ?? "",
+        },
+      ]),
+    ),
+    total: effective.total,
+    max: effective.max,
+    approved_at: new Date().toISOString(),
+  };
   const supabase = await createClient();
   const { error } = await supabase
     .from("results")
-    .update({ approved: true })
+    .update({ approved: true, final })
     .eq("submission_id", submissionId);
   if (error) {
     console.error("approveResult failed:", error.message);
@@ -179,7 +232,7 @@ export async function unapproveResult(
   const supabase = await createClient();
   const { error } = await supabase
     .from("results")
-    .update({ approved: false })
+    .update({ approved: false, final: null })
     .eq("submission_id", submissionId);
   if (error) {
     console.error("unapproveResult failed:", error.message);
@@ -187,4 +240,76 @@ export async function unapproveResult(
   }
   revalidateReview(loaded.assessmentId, submissionId);
   return { ok: true };
+}
+
+export interface PublishResult {
+  ok: boolean;
+  count?: number;
+  error?: string;
+}
+
+async function ownedSubmissionIds(
+  assessmentId: string,
+): Promise<string[] | { error: string }> {
+  const supabase = await createClient();
+  const { data: assessment } = await supabase
+    .from("assessments")
+    .select("id")
+    .eq("id", assessmentId)
+    .single();
+  if (!assessment) return { error: "Assessment not found." };
+  const { data: subs } = await supabase
+    .from("submissions")
+    .select("id")
+    .eq("assessment_id", assessmentId);
+  return ((subs ?? []) as { id: string }[]).map((s) => s.id);
+}
+
+export async function publishResults(
+  assessmentId: string,
+): Promise<PublishResult> {
+  await requireRole("lecturer");
+  const ids = await ownedSubmissionIds(assessmentId);
+  if (!Array.isArray(ids)) return { ok: false, error: ids.error };
+  let count = 0;
+  if (ids.length > 0) {
+    const supabase = await createClient();
+    const { count: updated, error } = await supabase
+      .from("results")
+      .update({ published: true }, { count: "exact" })
+      .in("submission_id", ids)
+      .eq("approved", true);
+    if (error) {
+      console.error("publishResults failed:", error.message);
+      return { ok: false, error: "Could not publish. Try again." };
+    }
+    count = updated ?? 0;
+  }
+  revalidatePath(`/lecturer/assessments/${assessmentId}`);
+  revalidatePath("/student");
+  return { ok: true, count };
+}
+
+export async function unpublishResults(
+  assessmentId: string,
+): Promise<PublishResult> {
+  await requireRole("lecturer");
+  const ids = await ownedSubmissionIds(assessmentId);
+  if (!Array.isArray(ids)) return { ok: false, error: ids.error };
+  let count = 0;
+  if (ids.length > 0) {
+    const supabase = await createClient();
+    const { count: updated, error } = await supabase
+      .from("results")
+      .update({ published: false }, { count: "exact" })
+      .in("submission_id", ids);
+    if (error) {
+      console.error("unpublishResults failed:", error.message);
+      return { ok: false, error: "Could not unpublish. Try again." };
+    }
+    count = updated ?? 0;
+  }
+  revalidatePath(`/lecturer/assessments/${assessmentId}`);
+  revalidatePath("/student");
+  return { ok: true, count };
 }

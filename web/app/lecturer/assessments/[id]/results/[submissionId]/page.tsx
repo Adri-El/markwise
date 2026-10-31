@@ -206,6 +206,7 @@ export default async function ResultReviewPage({
       markedAt: null,
       edited: false,
       approved: false,
+      published: false,
     })),
   );
   const position = ordered.findIndex((row) => row.submissionId === submissionId);

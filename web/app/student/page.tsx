@@ -1,4 +1,5 @@
 import { requireRole } from "@/lib/auth";
+import type { ResultFinal } from "@/lib/scoring";
 import { createClient } from "@/lib/supabase/server";
 import { isPast } from "@/lib/schedule";
 import type { Assessment, Submission } from "@/lib/types";
@@ -38,13 +39,41 @@ export default async function StudentDashboard() {
   );
   const { data: submissions } = await supabase
     .from("submissions")
-    .select("assessment_id, status")
+    .select("id, assessment_id, status")
     .eq("student_id", profile.id);
+  const submissionList = ((submissions ?? []) as Pick<
+    Submission,
+    "id" | "assessment_id" | "status"
+  >[]);
   const statusByAssessment = new Map(
-    ((submissions ?? []) as Pick<Submission, "assessment_id" | "status">[]).map(
-      (s) => [s.assessment_id, s.status],
-    ),
+    submissionList.map((s) => [s.assessment_id, s.status]),
   );
+  const assessmentBySubmission = new Map(
+    submissionList.map((s) => [s.id, s.assessment_id]),
+  );
+  const finalByAssessment = new Map<string, ResultFinal>();
+  if (submissionList.length > 0) {
+    const { data: results } = await supabase
+      .from("results")
+      .select("submission_id, final")
+      .in(
+        "submission_id",
+        submissionList.map((s) => s.id),
+      );
+    for (const row of (results ?? []) as {
+      submission_id: string;
+      final: unknown;
+    }[]) {
+      const assessmentId = assessmentBySubmission.get(row.submission_id);
+      if (
+        assessmentId &&
+        row.final !== null &&
+        typeof row.final === "object"
+      ) {
+        finalByAssessment.set(assessmentId, row.final as ResultFinal);
+      }
+    }
+  }
   const lecturerNames = await Promise.all(
     assessments.map(async (a) => {
       const { data } = await supabase.rpc("lecturer_name", {
@@ -73,6 +102,7 @@ export default async function StudentDashboard() {
           {assessments.map((a) => {
             const submitted =
               statusByAssessment.get(a.id) === "submitted";
+            const published = finalByAssessment.get(a.id);
             return (
               <Card key={a.id}>
                 <div className="space-y-2">
@@ -91,6 +121,11 @@ export default async function StudentDashboard() {
                     <Badge tone="info">{capitalize(a.kind)}</Badge>
                     {submitted && (
                       <Badge tone="success">Submitted</Badge>
+                    )}
+                    {published && (
+                      <Badge tone="success">
+                        Result: {published.total}/{published.max}
+                      </Badge>
                     )}
                   </div>
                   {!submitted &&

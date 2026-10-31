@@ -13,6 +13,7 @@ export interface ResultRow {
   markedAt: string | null;
   edited: boolean;
   approved: boolean;
+  published: boolean;
 }
 
 const STATUS_RANK: Record<NonNullable<ResultRow["status"]>, number> = {
@@ -21,7 +22,7 @@ const STATUS_RANK: Record<NonNullable<ResultRow["status"]>, number> = {
   marked: 2,
 };
 
-export function sortResultRows(rows: ResultRow[]): ResultRow[] {
+export function sortResultRows<T extends ResultRow>(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
     const rankA = a.status === null ? 3 : STATUS_RANK[a.status];
     const rankB = b.status === null ? 3 : STATUS_RANK[b.status];
@@ -57,6 +58,7 @@ export default function ResultsTable({
               <th className="py-2 pr-4 font-medium">Score</th>
               <th className="py-2 pr-4 font-medium">Flags</th>
               <th className="py-2 pr-4 font-medium">Approved</th>
+              <th className="py-2 pr-4 font-medium">Published</th>
               <th className="py-2 font-medium">Marked</th>
             </tr>
           </thead>
@@ -93,6 +95,13 @@ export default function ResultsTable({
                 <td className="py-2 pr-4">
                   {row.approved ? (
                     <Badge tone="success">Approved</Badge>
+                  ) : (
+                    <span className="text-slate-600">—</span>
+                  )}
+                </td>
+                <td className="py-2 pr-4">
+                  {row.published ? (
+                    <Badge tone="info">Published</Badge>
                   ) : (
                     <span className="text-slate-600">—</span>
                   )}

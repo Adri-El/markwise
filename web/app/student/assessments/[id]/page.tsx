@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
+import type { ResultFinal } from "@/lib/scoring";
 import { createClient } from "@/lib/supabase/server";
 import { isPast } from "@/lib/schedule";
 import type { Answer, Assessment, Question, Submission } from "@/lib/types";
@@ -121,6 +122,20 @@ export default async function StudentAssessmentPage({
   const submission = submissionRow as Submission | null;
   const submitted = submission?.status === "submitted";
 
+  let resultFinal: ResultFinal | null = null;
+  if (submitted && submission) {
+    const { data: resultRows } = await supabase
+      .from("results")
+      .select("final")
+      .eq("submission_id", submission.id)
+      .limit(1);
+    const raw = (resultRows ?? [])[0] as { final?: unknown } | undefined;
+    resultFinal =
+      raw?.final !== null && typeof raw?.final === "object"
+        ? (raw.final as ResultFinal)
+        : null;
+  }
+
   let questionList: Question[] = [];
   if (opened) {
     const { data: questions } = await supabase
@@ -198,6 +213,37 @@ export default async function StudentAssessmentPage({
           <p className="text-sm text-slate-600">
             Submitted <LocalDateTime value={submission.submitted_at} />
           </p>
+          {resultFinal ? (
+            <Card title="Your result">
+              <div className="space-y-3">
+                <p className="text-base font-medium text-slate-900">
+                  {resultFinal.total} / {resultFinal.max}
+                </p>
+                <ul className="divide-y divide-slate-200">
+                  {questionList.map((q) => {
+                    const s = resultFinal?.questions[q.code];
+                    if (!s) return null;
+                    return (
+                      <li key={q.id} className="space-y-1 py-2">
+                        <p className="text-sm font-medium text-slate-900">
+                          {q.code.toUpperCase()} · {s.marks} / {s.max}
+                        </p>
+                        {s.comment && (
+                          <p className="whitespace-pre-wrap text-sm text-slate-600">
+                            {s.comment}
+                          </p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </Card>
+          ) : (
+            <p className="text-sm text-slate-600">
+              Submitted. Results aren&apos;t published yet.
+            </p>
+          )}
           {isPdf ? (
             <ScriptLink url={scriptUrl} />
           ) : (

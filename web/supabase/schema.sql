@@ -622,3 +622,6 @@ $$ select p.full_name from profiles p
 
 revoke execute on function lecturer_name(uuid) from public, anon;
 grant execute on function lecturer_name(uuid) to authenticated;
+
+---------- v6: published result snapshot ----------
+alter table results add column if not exists final jsonb;
