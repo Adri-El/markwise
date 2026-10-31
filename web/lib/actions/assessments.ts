@@ -192,18 +192,6 @@ export async function updateSchedule(
     closesAt = input.closesAt;
   }
 
-  const { data: jobs } = await supabase
-    .from("marking_jobs")
-    .select("id")
-    .eq("assessment_id", input.assessmentId)
-    .eq("type", "mark_all")
-    .limit(1);
-  if ((jobs ?? []).length > 0)
-    return {
-      ok: false,
-      error: "Marking has started; the schedule can't be changed.",
-    };
-
   const { error } = await supabase
     .from("assessments")
     .update({ opens_at: opensAt, closes_at: closesAt })

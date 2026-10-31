@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRole } from "../auth";
+import { markingStarted } from "../marking";
 import { validateRubric } from "../rubric-validate";
 import { createClient } from "../supabase/server";
 import { DRAFT_BLOCK_REASON } from "../types";
@@ -24,13 +25,7 @@ export async function queueRubricDraft(
     .single();
   if (!assessment) return { ok: false, error: "Assessment not found." };
 
-  const { data: markJobs } = await supabase
-    .from("marking_jobs")
-    .select("id")
-    .eq("assessment_id", assessmentId)
-    .eq("type", "mark_all")
-    .limit(1);
-  if ((markJobs ?? []).length > 0)
+  if (await markingStarted(supabase, assessmentId))
     return {
       ok: false,
       error: "Marking has started; the rubric can't be redrafted.",
@@ -95,17 +90,6 @@ async function ownedAssessmentId(assessmentId: string): Promise<boolean> {
   return !!data;
 }
 
-async function markingStarted(assessmentId: string): Promise<boolean> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("marking_jobs")
-    .select("id")
-    .eq("assessment_id", assessmentId)
-    .eq("type", "mark_all")
-    .limit(1);
-  return (data ?? []).length > 0;
-}
-
 async function loadQuestions(assessmentId: string): Promise<Question[]> {
   const supabase = await createClient();
   const { data } = await supabase
@@ -136,11 +120,11 @@ export async function saveRubric(
   await requireRole("lecturer");
   if (!(await ownedAssessmentId(assessmentId)))
     return { ok: false, error: "Assessment not found." };
-  if (await markingStarted(assessmentId))
+  const supabase = await createClient();
+  if (await markingStarted(supabase, assessmentId))
     return { ok: false, error: MARKING_STARTED };
   const errors = validateRubric(points, await loadQuestions(assessmentId));
   if (errors.length > 0) return { ok: false, error: errors.join(" ") };
-  const supabase = await createClient();
   const { error } = await supabase
     .from("rubrics")
     .update({
@@ -163,7 +147,8 @@ export async function approveRubric(
   await requireRole("lecturer");
   if (!(await ownedAssessmentId(assessmentId)))
     return { ok: false, error: "Assessment not found." };
-  if (await markingStarted(assessmentId))
+  const supabase = await createClient();
+  if (await markingStarted(supabase, assessmentId))
     return { ok: false, error: MARKING_STARTED };
   const saved = await loadSavedPoints(assessmentId);
   const errors = validateRubric(saved, await loadQuestions(assessmentId));
@@ -173,7 +158,6 @@ export async function approveRubric(
       ok: false,
       error: "Resolve every point marked 'Needs your decision' first.",
     };
-  const supabase = await createClient();
   const { error } = await supabase
     .from("rubrics")
     .update({ approved: true, updated_at: new Date().toISOString() })
@@ -192,9 +176,9 @@ export async function unapproveRubric(
   await requireRole("lecturer");
   if (!(await ownedAssessmentId(assessmentId)))
     return { ok: false, error: "Assessment not found." };
-  if (await markingStarted(assessmentId))
-    return { ok: false, error: MARKING_STARTED };
   const supabase = await createClient();
+  if (await markingStarted(supabase, assessmentId))
+    return { ok: false, error: MARKING_STARTED };
   const { error } = await supabase
     .from("rubrics")
     .update({ approved: false, updated_at: new Date().toISOString() })

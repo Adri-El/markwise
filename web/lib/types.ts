@@ -79,12 +79,17 @@ export interface Answer {
 }
 
 export interface MarkingJobProgress {
-  stage?: "reading_notes" | "drafting" | "saving";
+  stage?: "reading_notes" | "drafting" | "saving" | "marking";
   points?: number;
   notes_pages?: number;
   unreadable_pages?: { file: string; page: number }[];
   warnings?: string[];
   usage?: { input_tokens?: number; output_tokens?: number };
+  total?: number;
+  done?: number;
+  needs_review?: number;
+  incomplete?: number;
+  note?: string;
 }
 
 export interface MarkingJob {

@@ -16,6 +16,11 @@ import Card from "@/components/ui/Card";
 import CopyButton from "@/components/CopyButton";
 import CourseNotesUpload from "@/components/CourseNotesUpload";
 import LocalDateTime from "@/components/LocalDateTime";
+import MarkAllStatus from "@/components/MarkAllStatus";
+import ResultsTable, {
+  sortResultRows,
+  type ResultRow,
+} from "@/components/ResultsTable";
 import RubricEditor from "@/components/RubricEditor";
 import RubricStatus from "@/components/RubricStatus";
 import ScheduleEditor from "@/components/ScheduleEditor";
@@ -95,11 +100,86 @@ export default async function AssessmentDetailPage({
     .from("enrollments")
     .select("student_id", { count: "exact", head: true })
     .eq("assessment_id", id);
-  const { count: submittedCount } = await supabase
+  const { data: submittedSubs } = await supabase
     .from("submissions")
-    .select("id", { count: "exact", head: true })
+    .select("id, student_id")
     .eq("assessment_id", id)
     .eq("status", "submitted");
+  const submittedList = ((submittedSubs ?? []) as {
+    id: string;
+    student_id: string;
+  }[]);
+  const submittedCount = submittedList.length;
+  const { data: markJobRows } = await supabase
+    .from("marking_jobs")
+    .select("*")
+    .eq("assessment_id", id)
+    .eq("type", "mark_all")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const latestMarkJob =
+    ((markJobRows ?? [])[0] as MarkingJob | undefined) ?? null;
+  interface ResultShape {
+    submission_id: string;
+    status: "marked" | "needs_review" | "incomplete";
+    total_marks: number | null;
+    max_marks: number | null;
+    flags: unknown;
+    marked_at: string | null;
+    approved: boolean;
+  }
+  let resultShapes: ResultShape[] = [];
+  let profileShapes: {
+    id: string;
+    full_name: string;
+    matric_number: string | null;
+  }[] = [];
+  if (submittedList.length > 0) {
+    const subIds = submittedList.map((s) => s.id);
+    const { data: results } = await supabase
+      .from("results")
+      .select(
+        "submission_id, status, total_marks, max_marks, flags, marked_at, approved",
+      )
+      .in("submission_id", subIds);
+    resultShapes = (results ?? []) as ResultShape[];
+    const studentIds = [...new Set(submittedList.map((s) => s.student_id))];
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, matric_number")
+      .in("id", studentIds);
+    profileShapes = (profiles ?? []) as typeof profileShapes;
+  }
+  const resultBySub = new Map(
+    resultShapes.map((r) => [r.submission_id, r]),
+  );
+  const profileById = new Map(profileShapes.map((p) => [p.id, p]));
+  const markedCount = submittedList.filter((s) => {
+    const status = resultBySub.get(s.id)?.status;
+    return status === "marked" || status === "needs_review";
+  }).length;
+  const waitingCount = submittedList.filter((s) => {
+    const result = resultBySub.get(s.id);
+    return (
+      !result || (result.status === "incomplete" && !result.approved)
+    );
+  }).length;
+  const resultTableRows: ResultRow[] = sortResultRows(
+    submittedList.map((s) => {
+      const result = resultBySub.get(s.id);
+      const profile = profileById.get(s.student_id);
+      return {
+        submissionId: s.id,
+        studentName: profile?.full_name ?? "Unknown student",
+        matric: profile?.matric_number ?? null,
+        status: result?.status ?? null,
+        total: result?.total_marks ?? null,
+        max: result?.max_marks ?? null,
+        flags: Array.isArray(result?.flags) ? result.flags.length : 0,
+        markedAt: result?.marked_at ?? null,
+      };
+    }),
+  );
 
   return (
     <div className="space-y-6">
@@ -179,14 +259,27 @@ export default async function AssessmentDetailPage({
               />
             </dd>
           </div>
-          <div className="flex items-center justify-between gap-4 py-2">
-            <dt className="text-sm font-medium text-slate-900">Marking</dt>
-            <dd className="text-sm text-slate-600">
-              Available after the due date
+          <div className="flex items-start justify-between gap-4 py-2">
+            <dt className="shrink-0 pt-0.5 text-sm font-medium text-slate-900">
+              Marking
+            </dt>
+            <dd className="min-w-0 flex-1">
+              <MarkAllStatus
+                assessmentId={id}
+                initialJob={latestMarkJob}
+                rubricApproved={rubricApproved}
+                submitted={submittedCount}
+                marked={markedCount}
+                waiting={waitingCount}
+                closesAt={a.closes_at}
+              />
             </dd>
           </div>
         </dl>
       </Card>
+      {submittedList.length > 0 && (
+        <ResultsTable assessmentId={id} rows={resultTableRows} />
+      )}
       {rubricPoints.length > 0 && (
         <RubricEditor
           assessmentId={id}
