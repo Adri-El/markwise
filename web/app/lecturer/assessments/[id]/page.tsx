@@ -16,7 +16,7 @@ import Card from "@/components/ui/Card";
 import CopyButton from "@/components/CopyButton";
 import CourseNotesUpload from "@/components/CourseNotesUpload";
 import LocalDateTime from "@/components/LocalDateTime";
-import RubricPreview from "@/components/RubricPreview";
+import RubricEditor from "@/components/RubricEditor";
 import RubricStatus from "@/components/RubricStatus";
 import ScheduleEditor from "@/components/ScheduleEditor";
 import StatusBadge from "@/components/StatusBadge";
@@ -188,7 +188,12 @@ export default async function AssessmentDetailPage({
         </dl>
       </Card>
       {rubricPoints.length > 0 && (
-        <RubricPreview questions={questionList} points={rubricPoints} />
+        <RubricEditor
+          assessmentId={id}
+          questions={questionList}
+          initialPoints={rubricPoints}
+          approved={rubricApproved}
+        />
       )}
       <div className="space-y-4">
         <h2 className="text-base font-semibold text-slate-900">Questions</h2>
