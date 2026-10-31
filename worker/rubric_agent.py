@@ -29,9 +29,12 @@ Rules:
   it sets the points and the mark split. Use the notes only for source quotes
   and accept/reject notes.
 - Without a scheme, derive points and marks from the notes and the question.
-- "Any N of" questions (e.g. "name any two causes"): add one point per
-  acceptable alternative found in the notes, each worth question_max / N.
-  Their sum may exceed the question max; the question max caps the score.
+- Item-count questions ("any N", or "give / list / state / name N
+  things"): add one point per acceptable item (alternatives are fine),
+  each worth question_max / N when that is a multiple of 0.5. Never
+  inflate per-item marks to make the alternatives' sum reach the max;
+  when question_max / N is not a multiple of 0.5, still add one point
+  per item and set needs_lecturer on the first so the lecturer decides.
 - Atomic points: one creditable idea per mark by default. Split a multi-mark
   idea into 1-mark points unless the notes or the scheme clearly say one idea
   is worth more. A multi-mark point with no clear split causes trouble later.
@@ -73,8 +76,60 @@ def any_n_requirement(question):
     return ANY_N_WORDS[word]
 
 
+N_ITEM_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+
+N_ITEM_VERBS = ("give", "list", "state", "name", "mention", "outline",
+                "identify", "explain", "describe")
+
+
+def _n_item_value(word):
+    word = word.lower()
+    if word.isdigit():
+        return int(word) or None
+    return N_ITEM_WORDS[word]
+
+
+def n_items_requirement(question):
+    """Number N when the prompt asks for N items, else None.
+
+    Matches "any N" plus "<verb> N <noun>" (give/list/state/name/...
+    N things), with N as digits or words one to ten. Bare numbers that
+    aren't counts (Java 8, years, mark counts) don't match.
+    """
+    prompt = str(question.get("prompt", ""))
+    numbers = "|".join(N_ITEM_WORDS) + r"|\d+"
+    match = re.search(r"\bany\s+(%s)\b" % numbers, prompt, re.IGNORECASE)
+    if match:
+        return _n_item_value(match.group(1))
+    match = re.search(
+        r"\b(%s)\s+(%s)\s+(\S+)" % ("|".join(N_ITEM_VERBS), numbers),
+        prompt, re.IGNORECASE)
+    if not match or match.group(3).lower().rstrip(".,;:") in ("mark", "marks"):
+        return None
+    return _n_item_value(match.group(2))
+
+
+def _question_label(question):
+    qid = str(question.get("id", ""))
+    match = re.fullmatch(r"q(\d+)", qid, re.IGNORECASE)
+    if match:
+        return "Q%s" % match.group(1)
+    return qid if qid else "?"
+
+
+def _fmt_marks(value):
+    return "%g" % value
+
+
 def check_any_n_warnings(assessment, points):
-    """Warn when "any N" alternatives aren't each worth max_marks / N.
+    """Warn about N-items splits and over-max alternatives.
+
+    For questions asking for N items at an even half-mark split, every
+    point should be worth max_marks / N. Uneven splits are flagged on
+    the points themselves by flag_uneven_splits instead. Questions
+    without an N-items requirement warn only when their points add up
+    to more than the max.
 
     Warnings only: finish() still succeeds, so the lecturer sees them in
     the transcript and the build summary instead of blocking the draft.
@@ -84,19 +139,62 @@ def check_any_n_warnings(assessment, points):
         by_question.setdefault(point["question_id"], []).append(point)
     warnings = []
     for question in assessment.get("questions", []):
-        required = any_n_requirement(question)
-        if not required:
-            continue
         qmax = question.get("max_marks")
         if not isinstance(qmax, (int, float)):
             continue
-        expected = float(qmax) / required
-        for point in by_question.get(question["id"], []):
-            if abs(float(point["max_marks"]) - expected) > 1e-9:
+        qpoints = by_question.get(question.get("id"), [])
+        required = n_items_requirement(question)
+        if required:
+            expected = float(qmax) / required
+            if expected > 0 and is_half_mark(expected):
+                for point in qpoints:
+                    if abs(float(point["max_marks"]) - expected) > 1e-9:
+                        warnings.append(
+                            "%s asks for %d items worth %s each, but "
+                            "point %s is worth %s"
+                            % (_question_label(question), required,
+                               _fmt_marks(expected), point["id"],
+                               _fmt_marks(point["max_marks"])))
+        elif qpoints:
+            total = sum(float(p["max_marks"]) for p in qpoints)
+            if total - float(qmax) > 1e-9:
                 warnings.append(
-                    "point %s: question asks for any %d but the point is "
-                    "worth %s instead of %s"
-                    % (point["id"], required, point["max_marks"], expected))
+                    "%s: points add up to %s but the question is worth "
+                    "%s. Check whether these are meant to be alternatives."
+                    % (_question_label(question), _fmt_marks(total),
+                       _fmt_marks(qmax)))
+    return warnings
+
+
+def flag_uneven_splits(assessment, points):
+    """Flag N-items questions whose max doesn't split into half marks.
+
+    Sets needs_lecturer on the question's first point so the lecturer
+    decides the split, and returns a warning per flagged question.
+    Idempotent: existing flags and reasons are kept.
+    """
+    by_question = {}
+    for point in points:
+        by_question.setdefault(point["question_id"], []).append(point)
+    warnings = []
+    for question in assessment.get("questions", []):
+        required = n_items_requirement(question)
+        qmax = question.get("max_marks")
+        if not required or not isinstance(qmax, (int, float)) or qmax <= 0:
+            continue
+        if is_half_mark(float(qmax) / required):
+            continue
+        qpoints = by_question.get(question.get("id"), [])
+        if not qpoints:
+            continue
+        reason = ("%s asks for %d items for %s marks, which doesn't "
+                  "split into half marks. Decide how to award the marks "
+                  "(e.g. 1 mark per item plus 1 for explaining one)."
+                  % (_question_label(question), required, _fmt_marks(qmax)))
+        if not qpoints[0].get("needs_lecturer"):
+            qpoints[0]["needs_lecturer"] = True
+            qpoints[0]["reason"] = reason
+        warnings.append(reason)
     return warnings
 
 
@@ -238,13 +336,15 @@ class RubricBuilderState:
         return {"ok": True, "point_id": point["id"]}
 
     def finish(self):
+        split_warnings = flag_uneven_splits(self.assessment, self.points)
         rubric = {"assessment_id": self.assessment.get("id"),
                   "points": self.points}
         errors = check_rubric(rubric, self.assessment)
         if errors:
             return {"ok": False, "error": "; ".join(errors), "errors": errors}
         result = {"ok": True, "points": self.points}
-        warnings = check_any_n_warnings(self.assessment, self.points)
+        warnings = (check_any_n_warnings(self.assessment, self.points)
+                    + split_warnings)
         if warnings:
             result["warnings"] = warnings
         return result

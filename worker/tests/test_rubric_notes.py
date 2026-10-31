@@ -15,6 +15,8 @@ from worker.rubric_agent import (
     any_n_requirement,
     build_builder_context,
     check_any_n_warnings,
+    flag_uneven_splits,
+    n_items_requirement,
     question_has_scheme,
 )
 from worker.tools import check_rubric
@@ -446,6 +448,176 @@ class FinishWarningsTests(unittest.TestCase):
         done = state.finish()
         self.assertTrue(done["ok"])
         self.assertNotIn("warnings", done)
+
+
+ITEMS_ASSESSMENT = {
+    "id": "demo",
+    "title": "Demo",
+    "questions": [
+        {"id": "q2",
+         "prompt": "Give 4 reasons why Java is a popular language.",
+         "max_marks": 4},
+    ],
+    "marking_scheme": {},
+}
+
+UNEVEN_ASSESSMENT = {
+    "id": "demo",
+    "title": "Demo",
+    "questions": [
+        {"id": "q2",
+         "prompt": "Give 4 reasons why Java is a popular language.",
+         "max_marks": 5},
+    ],
+    "marking_scheme": {},
+}
+
+
+class NItemsDetectionTests(unittest.TestCase):
+    def test_verb_count_forms(self):
+        cases = [
+            ("Give 4 reasons why Java is popular.", 4),
+            ("State two advantages of tests.", 2),
+            ("List three uses of dictionaries.", 3),
+            ("GIVE 5 EXAMPLES OF EACH.", 5),
+            ("Mention seven risk factors.", 7),
+            ("Identify ten parts of the cell.", 10),
+            ("Explain three causes of war.", 3),
+            ("Describe 2 processes in detail.", 2),
+            ("Outline four steps of mitosis.", 4),
+        ]
+        for prompt, expected in cases:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    n_items_requirement({"prompt": prompt}), expected)
+
+    def test_any_n_still_matches(self):
+        self.assertEqual(
+            n_items_requirement({"prompt": "State any two differences."}), 2)
+        self.assertEqual(
+            n_items_requirement({"prompt": "Name any seven wonders."}), 7)
+
+    def test_bare_numbers_do_not_match(self):
+        prompts = [
+            "What is Java 8?",
+            "Answer in 2 marks.",
+            "Enzymes. (a) 4 marks",
+            "Discuss programming since 1999.",
+            "Part (a): define osmosis.",
+            "Describe enzymes.",
+            "Name many parts.",
+            "Do anyone differs?",
+            "Give 4 marks for effort.",
+            "Define osmosis.",
+        ]
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertIsNone(n_items_requirement({"prompt": prompt}))
+        self.assertIsNone(n_items_requirement({}))
+
+
+class NItemsCheckTests(unittest.TestCase):
+    def test_even_split_deviation_warns(self):
+        points = [
+            {"id": "p1", "question_id": "q2", "max_marks": 1.0},
+            {"id": "p2", "question_id": "q2", "max_marks": 1.0},
+            {"id": "p3", "question_id": "q2", "max_marks": 1.0},
+            {"id": "p4", "question_id": "q2", "max_marks": 1.5},
+        ]
+        warnings = check_any_n_warnings(ITEMS_ASSESSMENT, points)
+        self.assertEqual(
+            warnings,
+            ["Q2 asks for 4 items worth 1 each, but point p4 is worth 1.5"])
+
+    def test_even_split_clean_has_no_warnings(self):
+        points = [
+            {"id": "p%d" % n, "question_id": "q2", "max_marks": 1.0}
+            for n in range(1, 5)
+        ]
+        self.assertEqual(check_any_n_warnings(ITEMS_ASSESSMENT, points), [])
+
+    def test_uneven_split_flags_first_point(self):
+        state = RubricBuilderState(UNEVEN_ASSESSMENT, ENTRIES)
+        state.add_point("q2", "portable", 1)
+        state.add_point("q2", "object oriented", 1)
+        state.add_point("q2", "libraries", 1)
+        state.add_point("q2", "community", 2)
+        done = state.finish()
+        self.assertTrue(done["ok"])
+        first = done["points"][0]
+        self.assertTrue(first.get("needs_lecturer"))
+        self.assertEqual(
+            first["reason"],
+            "Q2 asks for 4 items for 5 marks, which doesn't split into "
+            "half marks. Decide how to award the marks (e.g. 1 mark per "
+            "item plus 1 for explaining one).")
+        self.assertFalse(any(p.get("needs_lecturer")
+                             for p in done["points"][1:]))
+        self.assertEqual(
+            check_rubric({"assessment_id": "demo",
+                          "points": done["points"]}, UNEVEN_ASSESSMENT),
+            [])
+        self.assertEqual(len(done["warnings"]), 1)
+        self.assertIn("Q2 asks for 4 items", done["warnings"][0])
+
+    def test_uneven_split_keeps_existing_reason(self):
+        state = RubricBuilderState(UNEVEN_ASSESSMENT, ENTRIES)
+        state.add_point("q2", "portable", 2, needs_lecturer=True,
+                        reason="no notes coverage")
+        state.add_point("q2", "object oriented", 1)
+        state.add_point("q2", "libraries", 1)
+        state.add_point("q2", "community", 1)
+        done = state.finish()
+        self.assertTrue(done["ok"])
+        self.assertEqual(done["points"][0]["reason"], "no notes coverage")
+        self.assertEqual(len(done["warnings"]), 1)
+
+    def test_flag_uneven_splits_is_idempotent(self):
+        points = [
+            {"id": "p1", "question_id": "q2", "max_marks": 1.0},
+            {"id": "p2", "question_id": "q2", "max_marks": 2.0},
+        ]
+        first = flag_uneven_splits(UNEVEN_ASSESSMENT, points)
+        second = flag_uneven_splits(UNEVEN_ASSESSMENT, points)
+        self.assertEqual(len(first), 1)
+        self.assertEqual(first, second)
+        self.assertTrue(points[0].get("needs_lecturer"))
+
+    def test_over_max_without_requirement_warns(self):
+        assessment = {
+            "id": "demo",
+            "title": "Demo",
+            "questions": [
+                {"id": "q3", "prompt": "Explain osmosis in detail.",
+                 "max_marks": 5},
+            ],
+            "marking_scheme": {},
+        }
+        points = [
+            {"id": "p1", "question_id": "q3", "max_marks": 2.0},
+            {"id": "p2", "question_id": "q3", "max_marks": 2.0},
+            {"id": "p3", "question_id": "q3", "max_marks": 2.0},
+        ]
+        self.assertEqual(
+            check_any_n_warnings(assessment, points),
+            ["Q3: points add up to 6 but the question is worth 5. Check "
+             "whether these are meant to be alternatives."])
+
+    def test_at_max_without_requirement_is_quiet(self):
+        assessment = {
+            "id": "demo",
+            "title": "Demo",
+            "questions": [
+                {"id": "q3", "prompt": "Explain osmosis in detail.",
+                 "max_marks": 4},
+            ],
+            "marking_scheme": {},
+        }
+        points = [
+            {"id": "p1", "question_id": "q3", "max_marks": 2.0},
+            {"id": "p2", "question_id": "q3", "max_marks": 2.0},
+        ]
+        self.assertEqual(check_any_n_warnings(assessment, points), [])
 
 
 if __name__ == "__main__":
