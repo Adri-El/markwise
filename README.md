@@ -1,5 +1,14 @@
 # Markwise
 
+## The problem
+
+In Nigerian universities, students often wait weeks for a result. One reason
+is marking. A lecturer can have 200 or more scripts for a single test,
+assignment, or exam, and marking them by hand takes weeks. Markwise is built
+to cut that first pass. The lecturer approves the rubric, the model marks
+each script against it and quotes the student's own words, and the lecturer
+reviews, corrects, and publishes. The lecturer still decides.
+
 ## What it is
 
 Lecturers set an assignment, test, or exam. Students join with a code and
@@ -12,8 +21,8 @@ AI drafts, the lecturer decides.
 
 ## Who it is for
 
-Lecturers who have to defend a mark, and students who should see why they
-received it. Built for the Meta Global AI Developer Hackathon, startup
+Lecturers marking large classes, and students waiting on a result they can
+understand. Built for the Meta Global AI Developer Hackathon, startup
 track.
 
 ## How it works
@@ -125,4 +134,6 @@ Rubric caps apply per question, so a rule like "these reasons count for at
 most N" cannot be expressed. Matric numbers are not format-checked. The
 rubric cannot be changed after marking has started, and there is no re-mark
 after a rubric change. Rubric drafting and handwritten scripts use many
-more tokens than a typed script.
+more tokens than a typed script. Markwise has not been timed on a real
+cohort of 200 scripts, and other steps inside a university can still delay
+a result after marking is finished.
