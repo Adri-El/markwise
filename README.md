@@ -13,8 +13,10 @@ reviews, corrects, and publishes. The lecturer still decides.
 ## What it is
 
 Lecturers set an assignment, test, or exam. Students join with a code and
-submit typed answers or one PDF script. The model drafts a rubric once. The
-lecturer edits and approves it before any marking. Marking uses only that
+submit typed answers or one PDF script. A handwritten or scanned script is
+transcribed by the same model first, with [illegible] where a word cannot
+be read, and is then marked like any other script. The model drafts a
+rubric once. The lecturer edits and approves it before any marking. Marking uses only that
 approved rubric. The lecturer reviews the evidence, can override a point,
 then publishes. Students see their result. Excel export is one sheet named
 Results, with Name, Matric number, and Score (out of N). The principle: the
