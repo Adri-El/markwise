@@ -727,7 +727,7 @@ class MarkAllTests(unittest.TestCase):
             jobs.process_job(fake, mark_job())
         self.assertEqual(seen["pages"], vision_pages)
         row, _ = result_upserts(fake)[0]
-        self.assertEqual(row["status"], "marked")
+        self.assertEqual(row["status"], "needs_review")
         self.assertEqual(row["transcript"], transcript)
         self.assertEqual(row["usage"],
                          {"input_tokens": 19, "output_tokens": 22,
@@ -755,6 +755,21 @@ class MarkAllTests(unittest.TestCase):
             [{"question_id": "q1", "reason": "other",
               "note": jobs.VISION_FLAG_NOTE}])
         self.assertEqual(jobs._vision_flags(segments, ["q1"], []), [])
+
+    def test_flags_downgrade_marked_to_needs_review(self):
+        fake = FakeClient(rubric_approved=True,
+                          submissions=[dict(SUBMITTED_1)])
+        flagged = mark_result()
+        flagged["flags"] = [{"target": "q1", "reason": "ambiguous",
+                             "detail": "unclear wording"}]
+        with patch("worker.jobs.mark_submission",
+                   return_value=flagged):
+            jobs.process_job(fake, mark_job(), workers=1)
+        row, _ = result_upserts(fake)[0]
+        self.assertEqual(row["status"], "needs_review")
+        self.assertEqual(len(row["flags"]), 1)
+        done = status_updates(fake, "done", "job-m")
+        self.assertEqual(done[0]["progress"]["needs_review"], 1)
 
     def test_failing_submission_isolated(self):
         fake = FakeClient(

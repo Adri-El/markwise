@@ -28,6 +28,13 @@ interface Segment {
   text: string;
 }
 
+interface TranscriptEntry {
+  page: number;
+  source: "text" | "vision" | "failed";
+  text: string;
+  note?: string;
+}
+
 const FLAG_LABELS: Record<string, string> = {
   illegible: "Illegible",
   missing: "Missing answer",
@@ -93,6 +100,7 @@ export default async function ResultReviewPage({
         awards: Award[];
         flags: ResultFlag[];
         segments: Record<string, Segment>;
+        transcript: TranscriptEntry[];
         overrides: ResultOverrides | null;
         approved: boolean;
         published: boolean;
@@ -138,6 +146,11 @@ export default async function ResultReviewPage({
   const flags = Array.isArray(result.flags) ? result.flags : [];
   const scores = result.scores ?? {};
   const segments = result.segments ?? {};
+  const transcript: TranscriptEntry[] = Array.isArray(result.transcript)
+    ? result.transcript
+    : [];
+  const usedVision = transcript.some((t) => t.source === "vision");
+  const sourceByPage = new Map(transcript.map((t) => [t.page, t.source]));
   const overrides = result.overrides ?? {};
   const effective = effectiveScores(questionList, points, awards, overrides);
   const aiTotal = Object.values(effective.perQuestion).reduce(
@@ -262,6 +275,11 @@ export default async function ResultReviewPage({
               <Badge tone="neutral">Not approved</Badge>
             )}
             {result.published && <Badge tone="info">Published</Badge>}
+            {usedVision && (
+              <Badge tone="warning">
+                Handwritten. Transcribed by Muse Spark
+              </Badge>
+            )}
           </div>
           <p className="text-sm text-slate-700">
             <span className="font-medium">
@@ -313,6 +331,36 @@ export default async function ResultReviewPage({
         </Alert>
       )}
 
+      {transcript.length > 0 && (
+        <details className="rounded-lg border border-slate-200 bg-white p-5">
+          <summary className="cursor-pointer text-base font-semibold text-slate-900">
+            Transcription
+          </summary>
+          <ul className="mt-3 space-y-3">
+            {transcript.map((entry) => (
+              <li key={entry.page} className="space-y-1">
+                <p className="text-sm font-medium text-slate-900">
+                  Page {entry.page} · {entry.source}
+                </p>
+                {entry.source === "failed" && entry.note && (
+                  <p className="text-sm text-slate-600">{entry.note}</p>
+                )}
+                {(entry.source === "text" || entry.source === "vision") &&
+                  (entry.text.trim() ? (
+                    <p className="whitespace-pre-wrap text-sm text-slate-700">
+                      {entry.text}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-slate-500 italic">
+                      No text recorded.
+                    </p>
+                  ))}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
       {questionList.map((q) => {
         const per = effective.perQuestion[q.code];
         const comment = scores[q.code]?.comment;
@@ -358,7 +406,10 @@ export default async function ResultReviewPage({
                 )}
                 {a.answer_mode === "pdf" && segment?.found && (
                   <p className="text-xs text-slate-500">
-                    Found on page {segment.page}
+                    {segment.page !== null &&
+                    sourceByPage.get(segment.page) === "vision"
+                      ? `Transcribed from page ${segment.page}; check against the script`
+                      : `Found on page ${segment.page}`}
                   </p>
                 )}
                 <div className="max-h-64 overflow-auto rounded-md border border-slate-200 bg-slate-50 p-3">

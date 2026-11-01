@@ -435,11 +435,14 @@ def _mark_single(client, assessment, rubric, sub, answer_mode, typed,
     usage = _combined_usage(marking_usage, seg_usage, vision_usage)
     flags = list(result.get("flags", []))
     flags.extend(_vision_flags(segments, codes, transcript))
-    _upsert_result(client, sub["id"], max_marks, result["status"],
+    status = result["status"]
+    if flags and status == "marked":
+        status = "needs_review"
+    _upsert_result(client, sub["id"], max_marks, status,
                    result.get("scores", {}), result.get("awards", []),
                    flags, usage, segments,
                    result.get("total_marks", 0), transcript)
-    return (result["status"], usage["input_tokens"], usage["output_tokens"])
+    return (status, usage["input_tokens"], usage["output_tokens"])
 
 
 def _mark_all_usage():
