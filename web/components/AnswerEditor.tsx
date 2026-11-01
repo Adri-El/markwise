@@ -3,13 +3,19 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { attachScript, saveDraft, submitWork } from "@/lib/actions/submissions";
+import {
+  attachScript,
+  saveDraft,
+  setSubmissionDepartment,
+  submitWork,
+} from "@/lib/actions/submissions";
 import { MAX_ANSWER_CHARS, type AnswerMode } from "@/lib/types";
 import Button from "./ui/Button";
 import Card from "./ui/Card";
 import FieldError from "./ui/FieldError";
 import Label from "./ui/Label";
 import LocalDateTime from "./LocalDateTime";
+import Select from "./ui/Select";
 import Textarea from "./ui/Textarea";
 
 const MAX_SCRIPT_BYTES = 26_214_400; // 25 MB, matches the answer-pdfs bucket
@@ -34,6 +40,8 @@ export default function AnswerEditor({
   initial,
   scriptAttached,
   scriptUploadedAt,
+  departments,
+  savedDepartment,
 }: {
   assessmentId: string;
   studentId: string;
@@ -42,6 +50,8 @@ export default function AnswerEditor({
   initial: Record<string, DraftAnswer>;
   scriptAttached: boolean;
   scriptUploadedAt: string | null;
+  departments: string[];
+  savedDepartment: string | null;
 }) {
   const router = useRouter();
   const [drafts, setDrafts] = useState<Record<string, DraftAnswer>>(initial);
@@ -53,6 +63,54 @@ export default function AnswerEditor({
   const [scriptAt, setScriptAt] = useState<string | null>(scriptUploadedAt);
   const [uploadingScript, setUploadingScript] = useState(false);
   const [scriptError, setScriptError] = useState("");
+  const [department, setDepartment] = useState(savedDepartment ?? "");
+  const [savingDepartment, setSavingDepartment] = useState(false);
+
+  async function onDepartmentChange(value: string) {
+    if (value === "") return;
+    setError("");
+    setSavingDepartment(true);
+    try {
+      const result = await setSubmissionDepartment(assessmentId, value);
+      if (!result.ok) {
+        setError(result.error ?? "Could not save your department.");
+        return;
+      }
+      setDepartment(value);
+    } finally {
+      setSavingDepartment(false);
+    }
+  }
+
+  const departmentPicker = (
+    <Card title="Department">
+      <div className="max-w-xs">
+        <Label htmlFor="department">Department</Label>
+        <Select
+          id="department"
+          value={department}
+          disabled={savingDepartment}
+          onChange={(e) => onDepartmentChange(e.target.value)}
+        >
+          <option value="">Select your department</option>
+          {departments.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </Select>
+        {savingDepartment && (
+          <p className="mt-1 text-sm text-slate-600">Saving…</p>
+        )}
+      </div>
+    </Card>
+  );
+
+  function departmentChosen(): boolean {
+    if (department !== "") return true;
+    setError("Select your department before submitting.");
+    return false;
+  }
 
   function draftFor(questionId: string): DraftAnswer {
     return drafts[questionId] ?? { text: "", pdfPath: null };
@@ -131,6 +189,7 @@ export default function AnswerEditor({
 
   async function onSubmit() {
     setError("");
+    if (!departmentChosen()) return;
     setSubmitting(true);
     try {
       if (!(await persist())) return;
@@ -158,6 +217,7 @@ export default function AnswerEditor({
 
   async function onSubmitPdf() {
     setError("");
+    if (!departmentChosen()) return;
     if (!hasScript) {
       setError("Upload your answer script (PDF) before submitting.");
       return;
@@ -182,6 +242,7 @@ export default function AnswerEditor({
   if (answerMode === "pdf") {
     return (
       <div className="space-y-4">
+        {departmentPicker}
         {questions.map((q) => (
           <Card key={q.id} title={`${q.code} · ${q.max_marks} marks`}>
             <p className="whitespace-pre-wrap text-sm text-slate-700">
@@ -221,7 +282,11 @@ export default function AnswerEditor({
         </Card>
         <FieldError message={error} />
         <div>
-          <Button loading={submitting} onClick={onSubmitPdf}>
+          <Button
+            loading={submitting}
+            disabled={department === ""}
+            onClick={onSubmitPdf}
+          >
             Submit
           </Button>
         </div>
@@ -231,6 +296,7 @@ export default function AnswerEditor({
 
   return (
     <div className="space-y-4">
+      {departmentPicker}
       {questions.map((q) => {
         const draft = draftFor(q.id);
         return (
@@ -260,7 +326,11 @@ export default function AnswerEditor({
         <Button variant="secondary" loading={saving} onClick={onSave}>
           Save draft
         </Button>
-        <Button loading={submitting} onClick={onSubmit}>
+        <Button
+          loading={submitting}
+          disabled={department === ""}
+          onClick={onSubmit}
+        >
           Submit
         </Button>
         {savedAt && (

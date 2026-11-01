@@ -214,6 +214,11 @@ export default async function AssessmentDetailPage({
       <Card>
         <div className="space-y-3">
           <h1 className="text-xl font-semibold text-slate-900">{a.title}</h1>
+          {(a.departments ?? []).length > 0 && (
+            <p className="text-sm text-slate-600">
+              {(a.departments ?? []).join(", ")}
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
             <Badge tone="info">{capitalize(a.kind)}</Badge>
             <StatusBadge opensAt={a.opens_at} closesAt={a.closes_at} />

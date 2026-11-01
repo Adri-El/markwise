@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRole } from "../auth";
+import { parseDepartments } from "../departments";
 import { createClient } from "../supabase/server";
 import { isPast, isValidDate } from "../schedule";
 import type { AnswerMode, Assessment, AssessmentKind } from "../types";
@@ -21,6 +22,7 @@ export interface CreateAssessmentInput {
   closesAt: string | null;
   answerMode: AnswerMode;
   referenceNote: string;
+  departments: string;
   questions: QuestionInput[];
 }
 
@@ -47,6 +49,9 @@ export async function createAssessment(
     return { ok: false, error: "Kind must be assignment, test or exam." };
   if (input.answerMode !== "typed" && input.answerMode !== "pdf")
     return { ok: false, error: "Answer mode must be typed or PDF." };
+  const departments = parseDepartments(input.departments);
+  if (departments.length === 0)
+    return { ok: false, error: "At least one department is required." };
 
   let opensAt: string | null = null;
   let closesAt: string | null = null;
@@ -115,6 +120,7 @@ export async function createAssessment(
       closes_at: closesAt,
       answer_mode: input.answerMode,
       reference_note: input.referenceNote,
+      departments,
       questions: input.questions.map((q) => ({
         prompt: q.prompt.trim(),
         max_marks: q.maxMarks,

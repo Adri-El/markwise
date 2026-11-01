@@ -25,6 +25,8 @@ function friendlySubmitError(message: string): string {
     return "No draft submission was found. Save a draft first.";
   if (message.includes("no script uploaded"))
     return "Upload your answer script (PDF) before submitting.";
+  if (message.includes("choose a department"))
+    return "Select your department before submitting.";
   return "Could not submit. Try again.";
 }
 
@@ -122,6 +124,25 @@ export async function attachScript(
   if (error) {
     console.error("attachScript failed:", error.message);
     return { ok: false, error: friendlyAttachError(error.message) };
+  }
+  revalidatePath(`/student/assessments/${assessmentId}`);
+  revalidatePath("/student");
+  return { ok: true };
+}
+
+export async function setSubmissionDepartment(
+  assessmentId: string,
+  department: string,
+): Promise<SubmissionResult> {
+  await requireRole("student");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_submission_department", {
+    p_assessment_id: assessmentId,
+    p_department: department,
+  });
+  if (error) {
+    console.error("setSubmissionDepartment failed:", error.message);
+    return { ok: false, error: friendlySubmitError(error.message) };
   }
   revalidatePath(`/student/assessments/${assessmentId}`);
   revalidatePath("/student");

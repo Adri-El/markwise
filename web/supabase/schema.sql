@@ -394,12 +394,18 @@ grant execute on function join_with_code(text) to authenticated;
 create or replace function submit_submission(p_assessment_id uuid)
 returns void
 language plpgsql security definer set search_path = public as $$
-declare v_sub submissions%rowtype; v_open boolean;
+declare v_sub submissions%rowtype; v_open boolean; v_departments text[];
 begin
   select * into v_sub from submissions
   where assessment_id = p_assessment_id and student_id = auth.uid();
   if v_sub.id is null then raise exception 'no submission found'; end if;
   if v_sub.status <> 'draft' then raise exception 'already submitted'; end if;
+  select departments into v_departments from assessments
+  where id = p_assessment_id;
+  if v_sub.department is null or btrim(v_sub.department) = ''
+     or not (v_sub.department = any (v_departments)) then
+    raise exception 'choose a department';
+  end if;
   select (opens_at is null or now() >= opens_at)
      and (closes_at is null or now() <= closes_at)
     into v_open from assessments where id = p_assessment_id;
@@ -412,6 +418,31 @@ begin
   where id = v_sub.id;
 end; $$;
 grant execute on function submit_submission(uuid) to authenticated;
+
+---------- student picks a department on their draft ----------
+create or replace function set_submission_department(
+  p_assessment_id uuid, p_department text)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare v_sub submissions%rowtype; v_departments text[];
+begin
+  select * into v_sub from submissions
+  where assessment_id = p_assessment_id and student_id = auth.uid();
+  if v_sub.id is null then raise exception 'choose a department'; end if;
+  if v_sub.status <> 'draft' then raise exception 'choose a department'; end if;
+  select departments into v_departments from assessments
+  where id = p_assessment_id;
+  if p_department is null or btrim(p_department) = ''
+     or not (p_department = any (v_departments)) then
+    raise exception 'choose a department';
+  end if;
+  update submissions set department = p_department where id = v_sub.id;
+end; $$;
+
+revoke execute on function set_submission_department(uuid, text)
+  from public, anon;
+grant execute on function set_submission_department(uuid, text)
+  to authenticated;
 
 ---------- attach script (one PDF per submission; path computed server-side) ----------
 create or replace function attach_script(p_assessment_id uuid)
@@ -442,7 +473,8 @@ grant execute on function attach_script(uuid) to authenticated;
 
 ---------- atomic assessment creation (one transaction, invoker RLS applies) ----------
 -- p: {title, kind, instructions, opens_at, closes_at, answer_mode,
---     reference_note, questions: [{prompt, max_marks, scheme, subparts}]}
+--     reference_note, departments: [text, ...],
+--     questions: [{prompt, max_marks, scheme, subparts}]}
 create or replace function create_assessment(p jsonb)
 returns uuid
 language plpgsql security invoker set search_path = public as $$
@@ -455,7 +487,21 @@ declare
   v_alphabet constant text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   i int;
   attempt int;
+  v_departments text[] := '{}';
+  v_entry text;
 begin
+  if jsonb_typeof(p->'departments') = 'array' then
+    for v_entry in select jsonb_array_elements_text(p->'departments') loop
+      v_entry := initcap(regexp_replace(btrim(v_entry), '\s+', ' ', 'g'));
+      if v_entry = '' then continue; end if;
+      if not (v_entry = any (v_departments)) then
+        v_departments := v_departments || v_entry;
+      end if;
+    end loop;
+  end if;
+  if coalesce(array_length(v_departments, 1), 0) = 0 then
+    raise exception 'at least one department is required';
+  end if;
   for attempt in 1..5 loop
     v_code := '';
     for i in 1..6 loop
@@ -463,7 +509,7 @@ begin
     end loop;
     begin
       insert into assessments (lecturer_id, title, kind, instructions,
-        opens_at, closes_at, answer_mode, join_code)
+        opens_at, closes_at, answer_mode, join_code, departments)
       values (
         (select auth.uid()),
         p->>'title', p->>'kind',
@@ -471,7 +517,8 @@ begin
         nullif(p->>'opens_at', '')::timestamptz,
         nullif(p->>'closes_at', '')::timestamptz,
         coalesce(p->>'answer_mode', 'typed'),
-        v_code)
+        v_code,
+        v_departments)
       returning id into v_id;
       exit;
     exception when unique_violation then
@@ -628,3 +675,7 @@ alter table results add column if not exists final jsonb;
 
 ---------- v7: handwriting transcript ----------
 alter table results add column if not exists transcript jsonb not null default '[]';
+
+---------- v8: departments ----------
+alter table assessments add column if not exists departments text[] not null default '{}';
+alter table submissions add column if not exists department text;

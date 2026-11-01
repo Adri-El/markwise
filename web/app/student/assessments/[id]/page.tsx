@@ -213,6 +213,11 @@ export default async function StudentAssessmentPage({
           <p className="text-sm text-slate-600">
             Submitted <LocalDateTime value={submission.submitted_at} />
           </p>
+          {submission.department && (
+            <p className="text-sm text-slate-600">
+              Department: {submission.department}
+            </p>
+          )}
           {resultFinal ? (
             <Card title="Your result">
               <div className="space-y-3">
@@ -281,6 +286,8 @@ export default async function StudentAssessmentPage({
           assessmentId={id}
           studentId={profile.id}
           answerMode={a.answer_mode}
+          departments={a.departments ?? []}
+          savedDepartment={submission.department ?? null}
           questions={questionList.map((q) => ({
             id: q.id,
             code: q.code,

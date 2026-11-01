@@ -7,6 +7,7 @@ import {
   type QuestionInput,
 } from "@/lib/actions/assessments";
 import type { AnswerMode, AssessmentKind } from "@/lib/types";
+import { parseDepartments } from "@/lib/departments";
 import {
   MAX_NOTES_PER_ASSESSMENT,
   NOTE_ACCEPT,
@@ -105,6 +106,7 @@ export default function AssessmentForm() {
   const [closesAt, setClosesAt] = useState("");
   const [answerMode, setAnswerMode] = useState<AnswerMode>("typed");
   const [referenceNote, setReferenceNote] = useState("");
+  const [departments, setDepartments] = useState("");
   const [questions, setQuestions] = useState<FormQuestion[]>([blankQuestion()]);
   const [noteFiles, setNoteFiles] = useState<File[]>([]);
   const [notesError, setNotesError] = useState("");
@@ -173,6 +175,10 @@ export default function AssessmentForm() {
       setError("Title is required.");
       return;
     }
+    if (parseDepartments(departments).length === 0) {
+      setError("At least one department is required.");
+      return;
+    }
     const schedule = validateSchedule();
     if (typeof schedule === "string") {
       setError(schedule);
@@ -194,6 +200,7 @@ export default function AssessmentForm() {
         closesAt: schedule.closes,
         answerMode,
         referenceNote,
+        departments,
         questions: parsed,
       });
     } catch {
@@ -278,6 +285,18 @@ export default function AssessmentForm() {
               { value: "exam", label: "Exam" },
             ]}
           />
+          <div>
+            <Label htmlFor="assessment-departments">Departments</Label>
+            <Input
+              id="assessment-departments"
+              value={departments}
+              onChange={(e) => setDepartments(e.target.value)}
+              placeholder="Computer Science, Mathematics, Statistics"
+            />
+            <p className="mt-1 text-sm text-slate-600">
+              Required. Separate departments with commas.
+            </p>
+          </div>
           <div>
             <Label htmlFor="assessment-instructions">
               Instructions for students

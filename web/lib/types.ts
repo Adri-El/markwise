@@ -25,6 +25,7 @@ export interface Assessment {
   answer_mode: AnswerMode;
   join_code: string;
   created_at: string;
+  departments: string[];
 }
 
 export interface Subpart {
@@ -67,6 +68,7 @@ export interface Submission {
   created_at: string;
   updated_at: string;
   script_path: string | null;
+  department: string | null;
 }
 
 export interface Answer {

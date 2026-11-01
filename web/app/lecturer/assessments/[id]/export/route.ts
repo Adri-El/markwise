@@ -56,12 +56,13 @@ export async function GET(
     : [];
   const { data: submittedSubs } = await supabase
     .from("submissions")
-    .select("id, student_id")
+    .select("id, student_id, department")
     .eq("assessment_id", id)
     .eq("status", "submitted");
   const submittedList = ((submittedSubs ?? []) as {
     id: string;
     student_id: string;
+    department: string | null;
   }[]);
   let resultShapes: ResultShape[] = [];
   let profileShapes: {
@@ -100,6 +101,7 @@ export async function GET(
       return {
         name: profile?.full_name ?? "Unknown student",
         matric: profile?.matric_number ?? null,
+        department: s.department ?? null,
         score: total,
       };
     })
@@ -110,6 +112,7 @@ export async function GET(
   sheet.columns = [
     { header: "Name", key: "name", width: 24 },
     { header: "Matric number", key: "matric", width: 16 },
+    { header: "Department", key: "department", width: 20 },
     { header: `Score (out of ${max})`, key: "score", width: 16 },
   ];
   for (const row of rows) {
