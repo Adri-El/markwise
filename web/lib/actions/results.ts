@@ -23,6 +23,8 @@ interface OwnedResult {
   assessmentId: string;
   overrides: ResultOverrides;
   published: boolean;
+  status: string;
+  flags: unknown[];
   points: RubricPoint[];
   questions: Question[];
   scores: Record<string, { marks: number; max: number; comment: string }>;
@@ -48,7 +50,7 @@ async function loadOwnedResult(
   if (!assessment) return { error: "Submission not found." };
   const { data: resultRows } = await supabase
     .from("results")
-    .select("overrides, published, scores, awards")
+    .select("overrides, published, scores, awards, status, flags")
     .eq("submission_id", submissionId)
     .limit(1);
   const row = (resultRows ?? [])[0] as
@@ -57,6 +59,8 @@ async function loadOwnedResult(
         published: boolean;
         scores: unknown;
         awards: unknown;
+        status: unknown;
+        flags: unknown;
       }
     | undefined;
   if (!row) return { error: "No result to change yet." };
@@ -87,6 +91,8 @@ async function loadOwnedResult(
     assessmentId,
     overrides,
     published: row.published,
+    status: typeof row.status === "string" ? row.status : "",
+    flags: Array.isArray(row.flags) ? row.flags : [],
     points,
     questions: (questionRows ?? []) as Question[],
     scores,
@@ -211,7 +217,11 @@ export async function approveResult(
   const supabase = await createClient();
   const { error } = await supabase
     .from("results")
-    .update({ approved: true, final })
+    .update({
+      approved: true,
+      final,
+      ...(loaded.status === "needs_review" ? { status: "marked" } : {}),
+    })
     .eq("submission_id", submissionId);
   if (error) {
     console.error("approveResult failed:", error.message);
@@ -232,7 +242,13 @@ export async function unapproveResult(
   const supabase = await createClient();
   const { error } = await supabase
     .from("results")
-    .update({ approved: false, final: null })
+    .update({
+      approved: false,
+      final: null,
+      ...(loaded.status === "marked" && loaded.flags.length > 0
+        ? { status: "needs_review" }
+        : {}),
+    })
     .eq("submission_id", submissionId);
   if (error) {
     console.error("unapproveResult failed:", error.message);
