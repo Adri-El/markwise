@@ -6,7 +6,7 @@ In Nigerian public universities, students often wait months and even over
 a year for a result. One reason is marking. A lecturer can have 200 or more
 scripts for a single test, assignment, or exam, and marking them by hand
 takes months. Markwise is built
-to cut that first pass. The lecturer approves the rubric, the model marks
+to cut that first pass and speed up the process. The lecturer approves the rubric, the model marks
 each script against it and quotes the student's own words, and the lecturer
 reviews, corrects, and publishes. The lecturer still decides.
 
